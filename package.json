@@ -1,0 +1,35 @@
+{
+  "name": "@local/dsh-blue-whale-pet",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A floating blue whale girl that shows DSH context, token, skill, and agent usage.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./assets/*": "./assets/*",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png"
+  },
+  "files": [
+    "README.md",
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "assets",
+    "locale/*.json",
+    "icon.png"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

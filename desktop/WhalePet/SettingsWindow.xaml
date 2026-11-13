@@ -1,0 +1,423 @@
+<Window x:Class="WhalePet.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="鲸鱼娘桌宠设置"
+        Width="660"
+        Height="760"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        FocusManager.FocusedElement="{Binding ElementName=ShowStatusCheck}"
+        Background="#081A32"
+        Foreground="#EAF6FF"
+        FontFamily="Microsoft YaHei UI">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#CFEAFF"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#0F8FD3FF"/>
+            <Setter Property="Foreground" Value="#EAF6FF"/>
+            <Setter Property="BorderBrush" Value="#3D8FD3FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="7,5"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="Consolas, Microsoft YaHei UI"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="CaretBrush" Value="#EAF6FF"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#CFEAFF"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#8FD3FF"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,14,0,4"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#9AB6CE"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="0,5,0,2"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+            <Setter Property="ToolTipService.Placement" Value="Top"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="20000"/>
+        </Style>
+        <Style x:Key="Action" TargetType="Button">
+            <Setter Property="Background" Value="#0F8FD3FF"/>
+            <Setter Property="Foreground" Value="#CFEAFF"/>
+            <Setter Property="BorderBrush" Value="#4D8FD3FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#358FD3FF"/>
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#8FD3FF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#5A8FD3FF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Action}">
+            <Setter Property="Background" Value="#4D6BFE"/>
+            <Setter Property="BorderBrush" Value="#4D6BFE"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="鲸鱼娘桌宠设置" FontSize="18" FontWeight="Bold" Foreground="#F3FAFF"/>
+            <TextBlock Text="修改后会立即应用到桌面宠物，并保存到本机配置。"
+                       Foreground="#7FA5C5" FontSize="10" Margin="0,4,0,0"/>
+            <Border x:Name="NoticeBubble"
+                    Margin="0,10,0,0"
+                    Padding="10,8"
+                    CornerRadius="12,12,4,12"
+                    Background="#FFF8EA"
+                    BorderBrush="#330B1B3A"
+                    BorderThickness="1"
+                    Visibility="Collapsed">
+                <TextBlock x:Name="ErrorText"
+                           Foreground="#8A2E2E"
+                           FontSize="10.5"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"/>
+            </Border>
+        </StackPanel>
+
+        <ScrollViewer x:Name="SettingsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12,0,10"
+                      ScrollChanged="OnSettingsScrollChanged">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                <TextBlock Text="基础" Style="{StaticResource Section}"/>
+                <CheckBox x:Name="ShowStatusCheck" Content="显示数据状态栏"/>
+                <CheckBox x:Name="GreetingCheck" Content="启动时根据本地时间打招呼"/>
+                <CheckBox x:Name="AutoStartCheck" Content="开机自启动（登录 Windows 后自动运行）"/>
+                <CheckBox x:Name="ShowSettingsButtonCheck" Content="显示角色右上角的设置按钮（默认不显示）"/>
+                <CheckBox x:Name="WeatherCheck" Content="在角色上方显示本地天气（需要联网）" Checked="OnWeatherChanged" Unchecked="OnWeatherChanged"/>
+
+                <Grid Margin="0,5,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="空闲判定（分钟）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="IdleMinutesBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                        <TextBlock Text="互动形象持续（秒）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PlaySecondsBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="切换动画（毫秒）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="TransitionBox"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="0,5,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="界面大小（0.1–1.5）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="ScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                        <TextBlock Text="角色大小（0.1–1.5）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="CharacterScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="主动聊天间隔（分钟，0=关闭）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="ChatIdleMinutesBox"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="0,5,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="状态栏大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="StatusBarScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                        <TextBlock Text="备忘录界面大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="MemoUiScaleBox"/>
+                    </StackPanel>
+                </Grid>
+
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="设备与贴边" Style="{StaticResource Section}"/>
+                        <CheckBox x:Name="ShowDeviceInfoCheck" Content="在展开状态栏中显示设备信息"/>
+                        <CheckBox x:Name="ShowRemovableDevicesCheck" Content="在状态栏显示已连接的移动设备"/>
+                        <CheckBox x:Name="ShowWaterReminderCheck" Content="启用喝水提醒"/>
+                        <CheckBox x:Name="AutoHideCheck" Content="拖到屏幕边缘时自动收起"/>
+                        <Grid Margin="0,58,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,6,0">
+                                <TextBlock Text="自动收起边缘距离（0–50px）" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="EdgeDistanceBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                                <TextBlock Text="悬停展开保持（秒）" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="EdgeHoverSecondsBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="喝水提醒间隔（分钟）" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="WaterMinutesBox"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="外观" Style="{StaticResource Section}"/>
+                <Grid Margin="0,3,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="状态栏文字大小（px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="StatusFontSizeBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="设置文字大小（px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SettingsFontSizeBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Margin="0,5,8,0">
+                        <TextBlock Text="备忘录文字大小（px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="MemoFontSizeBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,5,0,0">
+                        <TextBlock Text="互动气泡文字大小（px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SpeechBubbleFontSizeBox"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="0,5,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="界面主题色（#RRGGBB）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="ThemeColorBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="状态栏文字颜色" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="StatusTextColorBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Margin="0,5,8,0">
+                        <TextBlock Text="设置文字颜色" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SettingsTextColorBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,5,0,0">
+                        <TextBlock Text="备忘录文字颜色" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="MemoTextColorBox"/>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="控件大小" Style="{StaticResource Section}"/>
+                <Grid Margin="0,3,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="设置按钮大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SettingsButtonScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="备忘录按钮大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="MemoButtonScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Margin="0,5,8,0">
+                        <TextBlock Text="互动气泡大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SpeechBubbleScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,5,0,0">
+                        <TextBlock Text="键鼠状态大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="InputBadgeScaleBox"/>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="天气位置" Style="{StaticResource Section}"/>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="180"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="天气位置（只填一个城市，留空则按 IP 自动定位）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WeatherCityBox" MaxLength="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="天气文字大小（px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WeatherFontSizeBox"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="例如：杭州、上海、Tokyo。请勿填写多个城市或使用逗号分隔；天气文字大小独立于状态栏。"
+                           Foreground="#6F8CA6" FontSize="9" Margin="0,4,0,2" TextWrapping="Wrap"/>
+
+                <TextBlock Text="工作日程" Style="{StaticResource Section}"/>
+                <UniformGrid Columns="7" Margin="0,2,0,4">
+                    <CheckBox x:Name="WorkMonCheck" Content="周一" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="WorkTueCheck" Content="周二" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="WorkWedCheck" Content="周三" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="WorkThuCheck" Content="周四" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="WorkFriCheck" Content="周五" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="WorkSatCheck" Content="周六" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <CheckBox x:Name="WorkSunCheck" Content="周日" VerticalAlignment="Center"/>
+                </UniformGrid>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="上班时间（HH:mm）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WorkStartBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="下班时间（HH:mm）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WorkEndBox"/>
+                    </StackPanel>
+                </Grid>
+                <CheckBox x:Name="ShowWorkBadgeCheck" Content="搬砖提示框(角色左侧显示)"/>
+                <TextBox x:Name="WorkBadgeTextBox" Margin="0,2,0,4"/>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="搬砖提示框大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WorkBadgeScaleBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="搬砖提示框文字大小（px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WorkBadgeFontSizeBox"/>
+                    </StackPanel>
+                </Grid>
+                <CheckBox x:Name="ShowBeforeWorkReminderCheck" Content="显示下班前 5 分钟提示"/>
+                <TextBlock Text="下班前 5 分钟提示" Style="{StaticResource FieldLabel}"/>
+                <TextBox x:Name="WorkBeforeReminderBox"/>
+                <CheckBox x:Name="ShowEndWorkReminderCheck" Content="显示下班时间提示"/>
+                <TextBlock Text="下班时间提示" Style="{StaticResource FieldLabel}"/>
+                <TextBox x:Name="WorkEndReminderBox"/>
+
+                <TextBlock Text="角色形象（每行一个路径，至少 1 张；支持绝对路径或相对本程序的 Assets 路径）" Style="{StaticResource Section}"/>
+                <TextBlock Text="主形象" Style="{StaticResource FieldLabel}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="MainImagesBox" AcceptsReturn="True" Height="76" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnBrowseMain"/>
+                </Grid>
+                <TextBlock Text="空闲 / 休眠形象" Style="{StaticResource FieldLabel}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="IdleImagesBox" AcceptsReturn="True" Height="76" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnBrowseIdle"/>
+                </Grid>
+                <TextBlock Text="互动形象" Style="{StaticResource FieldLabel}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="PlayImagesBox" AcceptsReturn="True" Height="90" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnBrowsePlay"/>
+                </Grid>
+                <TextBlock Text="删除图片：直接删掉对应行；每种状态少于 1 张时无法保存。"
+                           Foreground="#6F8CA6" FontSize="9" Margin="0,4,0,0"/>
+                <TextBlock Text="点击互动的短句（每行一条，至少 1 条）" Style="{StaticResource Section}"/>
+                <TextBox x:Name="PhrasesBox" AcceptsReturn="True" Height="92" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+                <TextBlock Text="主动聊天内容（每行一条；间隔大于 0 时至少 1 条）" Style="{StaticResource Section}"/>
+                <TextBox x:Name="ChatPhrasesBox" AcceptsReturn="True" Height="80" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="ConfigHint" Foreground="#6F8CA6" FontSize="9" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="取消" Style="{StaticResource Action}" Click="OnCancel"/>
+                <Button x:Name="SaveButton" Content="保存" Style="{StaticResource Primary}" Click="OnSave"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

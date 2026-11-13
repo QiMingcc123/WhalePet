@@ -1,0 +1,10 @@
+# Build intermediates
+desktop/WhalePet/bin/
+desktop/WhalePet/obj/
+dist/publish-tmp/
+*.user
+.vs/
+
+# OS files
+Thumbs.db
+desktop.ini

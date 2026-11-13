@@ -1,0 +1,29 @@
+# 移动设备安全弹出测试记录（2026-11-13）
+
+测试设备：LEGION PSSD（USB 移动硬盘，H:，资源管理器将其报告为固定磁盘）
+
+设备定位结果：
+
+```text
+磁盘节点  SCSI\DISK&VEN_LEGION&PROD_PSSD\6&1B4366A3&0&000000
+USB 节点   USB\VID_152D&PID_0562\MSFT30DD56419886D61
+```
+
+## 旧实现：移除时仍持有卷句柄
+
+```text
+success=False
+系统拒绝了弹出请求（STORAGE\Volume\{db076176-9a6e-11f0-8037-2c33583be5b5}#0000000001000000）。
+请关闭相关程序后重试（错误码 0x17）。
+```
+
+原因：调用 `CM_Request_Device_Eject` 时仍持有卷的读写句柄，卷设备节点因此否决了移除请求（`CR_REMOVE_VETOED`）。
+
+## 新实现：刷新缓存 → 锁定/卸载卷 → 关闭句柄 → PnP 移除
+
+```text
+success=True
+已安全弹出 H:，现在可以拔下移动硬盘了。
+```
+
+随后 `Get-Volume -DriveLetter H` 返回空、`Get-Disk` 中不再有该 USB 磁盘，说明设备已真正从系统弹出（测试时已实际断开，需重新插拔或在设备管理器中以管理员身份扫描硬件改动来恢复）。
