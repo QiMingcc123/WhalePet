@@ -1,0 +1,89 @@
+<Window x:Class="WhalePet.ScreenshotOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="截图"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Topmost="True"
+        WindowStartupLocation="Manual"
+        Cursor="Cross"
+        FontFamily="Microsoft YaHei UI"
+        KeyDown="OnKeyDown">
+    <Window.Resources>
+        <Style x:Key="OverlayButton" TargetType="Button">
+            <Setter Property="Background" Value="#148FD3FF"/>
+            <Setter Property="Foreground" Value="#EAF6FF"/>
+            <Setter Property="BorderBrush" Value="#4D8FD3FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#358FD3FF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid" Background="Transparent"
+          MouseLeftButtonDown="OnMouseDown"
+          MouseMove="OnMouseMove"
+          MouseLeftButtonUp="OnMouseUp">
+        <Image x:Name="ScreenImage" Stretch="Fill" IsHitTestVisible="False"/>
+        <Border x:Name="DimAll" Background="#99000000" IsHitTestVisible="False"/>
+        <Image x:Name="BrightImage" Stretch="Fill" IsHitTestVisible="False"/>
+
+        <Canvas x:Name="Overlay" IsHitTestVisible="False">
+            <Border x:Name="SelectionBorder" BorderBrush="#FF62C3FF" BorderThickness="1.5"
+                    Background="Transparent"/>
+            <Border x:Name="Handle0" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle1" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle2" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle3" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle4" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle5" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle6" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="Handle7" Width="8" Height="8" Background="#FF62C3FF" CornerRadius="2"/>
+            <Border x:Name="SizeBadge" Background="#E6081A32" BorderBrush="#668FD3FF" BorderThickness="1"
+                    CornerRadius="6" Padding="7,3">
+                <TextBlock x:Name="SizeText" Foreground="#EAF6FF" FontSize="10"/>
+            </Border>
+        </Canvas>
+
+        <Border x:Name="Toolbar" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,18,0,0"
+                Padding="14,8" CornerRadius="10" Background="#F2081A32"
+                BorderBrush="#4D8FD3FF" BorderThickness="1"
+                MouseLeftButtonDown="OnToolbarMouseDown">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.4" Color="#000714"/>
+            </Border.Effect>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="HintText" Text="拖动选择截图区域，可拖动边缘调整"
+                           Foreground="#CFEAFF" FontSize="11" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <Button Content="取消" Style="{StaticResource OverlayButton}" Click="OnCancel"/>
+                <Button x:Name="ConfirmButton" Content="编辑截图" Style="{StaticResource OverlayButton}"
+                        Click="OnConfirm" Background="#4D6BFE" BorderBrush="#4D6BFE"
+                        Foreground="#FFFFFF"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -42,6 +42,24 @@ public sealed class PetSettings
     public bool ShowWaterReminder { get; set; } = true;
     public int WaterReminderMinutes { get; set; } = 30;
 
+    public bool SedentaryReminderEnabled { get; set; } = false;
+    public int SedentaryMinutes { get; set; } = 45;
+    public bool AlarmsEnabled { get; set; } = false;
+    public List<AlarmItem> Alarms { get; set; } = new();
+    public bool ClipboardHistoryEnabled { get; set; } = true;
+    public bool LockScreenEnabled { get; set; } = true;
+
+    public bool BackgroundImageEnabled { get; set; } = false;
+    public string BackgroundImagePath { get; set; } = "";
+    public double BackgroundImageOpacity { get; set; } = 0.35;
+
+    public bool ScreenshotEnabled { get; set; } = false;
+    public bool ScreenshotCtrl { get; set; } = true;
+    public bool ScreenshotAlt { get; set; } = true;
+    public bool ScreenshotShift { get; set; } = false;
+    public bool ScreenshotWin { get; set; } = false;
+    public string ScreenshotKey { get; set; } = "A";
+
     public List<int> WorkDays { get; set; } = new() { 1, 2, 3, 4, 5 };
     public string WorkStart { get; set; } = "09:00";
     public string WorkEnd { get; set; } = "18:00";
@@ -136,6 +154,21 @@ public sealed class PetSettings
             MemoUiScale = MemoUiScale,
             ShowWaterReminder = ShowWaterReminder,
             WaterReminderMinutes = WaterReminderMinutes,
+            SedentaryReminderEnabled = SedentaryReminderEnabled,
+            SedentaryMinutes = SedentaryMinutes,
+            AlarmsEnabled = AlarmsEnabled,
+            Alarms = Alarms.Select(alarm => alarm.Clone()).ToList(),
+            ClipboardHistoryEnabled = ClipboardHistoryEnabled,
+            LockScreenEnabled = LockScreenEnabled,
+            BackgroundImageEnabled = BackgroundImageEnabled,
+            BackgroundImagePath = BackgroundImagePath,
+            BackgroundImageOpacity = BackgroundImageOpacity,
+            ScreenshotEnabled = ScreenshotEnabled,
+            ScreenshotCtrl = ScreenshotCtrl,
+            ScreenshotAlt = ScreenshotAlt,
+            ScreenshotShift = ScreenshotShift,
+            ScreenshotWin = ScreenshotWin,
+            ScreenshotKey = ScreenshotKey,
             WorkDays = WorkDays.ToList(),
             WorkStart = WorkStart,
             WorkEnd = WorkEnd,
@@ -187,6 +220,12 @@ public sealed class PetSettings
         EdgeHoverSeconds = Math.Clamp(Math.Round(EdgeHoverSeconds, 1), 1, 10);
         MemoUiScale = Math.Clamp(Math.Round(MemoUiScale, 2), 0.5, 2);
         WaterReminderMinutes = Math.Clamp(WaterReminderMinutes, 5, 240);
+        SedentaryMinutes = Math.Clamp(SedentaryMinutes, 0, 240);
+        Alarms = NormalizeAlarms(Alarms);
+        BackgroundImagePath = (BackgroundImagePath ?? "").Trim();
+        if (!double.IsFinite(BackgroundImageOpacity)) BackgroundImageOpacity = 0.35;
+        BackgroundImageOpacity = Math.Clamp(Math.Round(BackgroundImageOpacity, 2), 0, 1);
+        ScreenshotKey = NormalizeScreenshotKey(ScreenshotKey);
         WorkBadgeScale = Math.Clamp(Math.Round(WorkBadgeScale, 2), 0.5, 2);
         WorkBadgeFontSize = Math.Clamp(Math.Round(WorkBadgeFontSize, 1), 8, 32);
 
@@ -241,6 +280,44 @@ public sealed class PetSettings
         if (separator >= 0) text = text[..separator].Trim();
         text = string.Join(' ', text.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         return text.Length > 30 ? text[..30] : text;
+    }
+
+    public static readonly string[] ScreenshotKeys =
+        Enumerable.Range('A', 26).Select(code => ((char)code).ToString())
+            .Concat(Enumerable.Range(0, 10).Select(number => number.ToString()))
+            .Concat(Enumerable.Range(1, 12).Select(number => "F" + number))
+            .ToArray();
+
+    public static string NormalizeScreenshotKey(string? value)
+    {
+        var text = (value ?? "").Trim().ToUpperInvariant();
+        return ScreenshotKeys.Contains(text) ? text : "A";
+    }
+
+    private static List<AlarmItem> NormalizeAlarms(List<AlarmItem>? alarms)
+    {
+        var result = new List<AlarmItem>();
+        foreach (var alarm in alarms ?? new List<AlarmItem>())
+        {
+            if (alarm is null) continue;
+            var start = AlarmItem.NormalizeClock(alarm.Start) ?? "09:00";
+            var end = string.IsNullOrWhiteSpace(alarm.End) ? "" : AlarmItem.NormalizeClock(alarm.End) ?? "";
+            if (end.Length > 0 && string.CompareOrdinal(end, start) < 0) end = "";
+            var text = (alarm.Text ?? "").Trim();
+            if (text.Length == 0) continue;
+            if (text.Length > 60) text = text[..60];
+            result.Add(new AlarmItem
+            {
+                Enabled = alarm.Enabled,
+                Date = alarm.Date,
+                Start = start,
+                End = end,
+                Text = text,
+                Popup = alarm.Popup,
+            });
+            if (result.Count >= 10) break;
+        }
+        return result;
     }
 
     private static string NormalizeTime(string? value, string fallback)

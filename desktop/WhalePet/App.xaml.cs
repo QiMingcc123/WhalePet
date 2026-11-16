@@ -10,7 +10,7 @@ public partial class App : Application
     private const string MutexName = @"Local\DSHWhalePet.SingleInstance";
     private Mutex? _singleInstanceMutex;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         _singleInstanceMutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
         if (!createdNew)
@@ -22,7 +22,23 @@ public partial class App : Application
 
         AssetBootstrapper.Ensure();
         base.OnStartup(e);
-        ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            var splash = new SplashWindow();
+            await splash.ShowAsync();
+
+            var main = new MainWindow();
+            MainWindow = main;
+            main.Show();
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show("启动失败：" + error.Message, "鲸鱼娘", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

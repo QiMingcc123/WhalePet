@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -9,6 +10,7 @@ public partial class SettingsWindow : Window
 {
     public PetSettings Settings { get; private set; }
     private bool _initialScrollLock = true;
+    private List<AlarmItem> _alarms = new();
 
     public SettingsWindow(PetSettings settings)
     {
@@ -30,6 +32,22 @@ public partial class SettingsWindow : Window
         EdgeDistanceBox.Text = settings.EdgeCollapseDistance.ToString(CultureInfo.InvariantCulture);
         EdgeHoverSecondsBox.Text = settings.EdgeHoverSeconds.ToString(CultureInfo.InvariantCulture);
         WaterMinutesBox.Text = settings.WaterReminderMinutes.ToString(CultureInfo.InvariantCulture);
+        SedentaryCheck.IsChecked = settings.SedentaryReminderEnabled;
+        SedentaryMinutesBox.Text = settings.SedentaryMinutes.ToString(CultureInfo.InvariantCulture);
+        AlarmsCheck.IsChecked = settings.AlarmsEnabled;
+        _alarms = settings.Alarms.Select(alarm => alarm.Clone()).ToList();
+        UpdateAlarmSummary();
+        ClipboardCheck.IsChecked = settings.ClipboardHistoryEnabled;
+        LockScreenCheck.IsChecked = settings.LockScreenEnabled;
+        BackgroundImageCheck.IsChecked = settings.BackgroundImageEnabled;
+        BackgroundImageBox.Text = settings.BackgroundImagePath;
+        BackgroundOpacityBox.Text = settings.BackgroundImageOpacity.ToString(CultureInfo.InvariantCulture);
+        ScreenshotCheck.IsChecked = settings.ScreenshotEnabled;
+        ScreenshotCtrlCheck.IsChecked = settings.ScreenshotCtrl;
+        ScreenshotAltCheck.IsChecked = settings.ScreenshotAlt;
+        ScreenshotShiftCheck.IsChecked = settings.ScreenshotShift;
+        ScreenshotWinCheck.IsChecked = settings.ScreenshotWin;
+        ScreenshotKeyBox.Text = settings.ScreenshotKey;
         WorkMonCheck.IsChecked = settings.WorkDays.Contains(1);
         WorkTueCheck.IsChecked = settings.WorkDays.Contains(2);
         WorkWedCheck.IsChecked = settings.WorkDays.Contains(3);
@@ -60,7 +78,7 @@ public partial class SettingsWindow : Window
         SettingsTextColorBox.Text = settings.SettingsTextColor;
         MemoTextColorBox.Text = settings.MemoTextColor;
         SettingsButtonScaleBox.Text = settings.SettingsButtonScale.ToString(CultureInfo.InvariantCulture);
-        MemoButtonScaleBox.Text = settings.MemoButtonScale.ToString(CultureInfo.InvariantCulture);
+        SpeechBubbleScaleBox.Text = settings.SpeechBubbleScale.ToString(CultureInfo.InvariantCulture);
         SpeechBubbleScaleBox.Text = settings.SpeechBubbleScale.ToString(CultureInfo.InvariantCulture);
         SpeechBubbleFontSizeBox.Text = settings.SpeechBubbleFontSize.ToString(CultureInfo.InvariantCulture);
         InputBadgeScaleBox.Text = settings.InputBadgeScale.ToString(CultureInfo.InvariantCulture);
@@ -125,6 +143,35 @@ public partial class SettingsWindow : Window
         SaveButton.Background = theme;
         SaveButton.BorderBrush = theme;
         NoticeBubble.BorderBrush = theme;
+        Background = ThemePalette.Surface(
+            Settings.ThemeColor,
+            Settings.BackgroundImageEnabled,
+            Settings.BackgroundImagePath,
+            Settings.BackgroundImageOpacity,
+            0.14);
+    }
+
+    private void OnPickColor(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: System.Windows.Controls.TextBox box }) return;
+        var dialog = new ColorPickerWindow(box.Text) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            box.Text = dialog.SelectedColor;
+        }
+    }
+
+    private void OnBrowseBackground(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择背景图片",
+            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif|所有文件|*.*",
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog() != true) return;
+        BackgroundImageBox.Text = dialog.FileName;
+        BackgroundImageCheck.IsChecked = true;
     }
 
     private static SolidColorBrush Brush(string color)
@@ -183,6 +230,35 @@ public partial class SettingsWindow : Window
     }
 
     private void OnWeatherChanged(object sender, RoutedEventArgs e) => UpdateWeatherLocationState();
+
+    private void OnEditAlarms(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AlarmWindow(_alarms) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            _alarms = dialog.Alarms;
+            UpdateAlarmSummary();
+        }
+    }
+
+    private void UpdateAlarmSummary()
+    {
+        if (_alarms.Count == 0)
+        {
+            AlarmSummary.Text = "还没有闹钟，点右侧按钮添加。";
+            return;
+        }
+
+        var preview = string.Join("、", _alarms
+            .Take(4)
+            .Select(alarm =>
+            {
+                var date = alarm.IsDaily ? "每天 " : alarm.Date + " ";
+                var range = alarm.Start + (string.IsNullOrWhiteSpace(alarm.End) ? "" : "-" + alarm.End);
+                return date + range;
+            }));
+        AlarmSummary.Text = $"已设置 {_alarms.Count} 个闹钟：{preview}" + (_alarms.Count > 4 ? "…" : "");
+    }
 
     private void UpdateWeatherLocationState()
     {
@@ -273,8 +349,6 @@ public partial class SettingsWindow : Window
         }
         if (!double.TryParse(SettingsButtonScaleBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var settingsButtonScale)
             || settingsButtonScale < 0.5 || settingsButtonScale > 2
-            || !double.TryParse(MemoButtonScaleBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var memoButtonScale)
-            || memoButtonScale < 0.5 || memoButtonScale > 2
             || !double.TryParse(SpeechBubbleScaleBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var speechBubbleScale)
             || speechBubbleScale < 0.5 || speechBubbleScale > 2
             || !double.TryParse(InputBadgeScaleBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var inputBadgeScale)
@@ -307,6 +381,40 @@ public partial class SettingsWindow : Window
             || waterMinutes < 5 || waterMinutes > 240)
         {
             ShowNotice("喝水提醒间隔必须在 5–240 分钟之间。");
+            return;
+        }
+        var sedentaryText = SedentaryMinutesBox.Text.Trim();
+        if (sedentaryText.Length == 0) sedentaryText = "0";
+        if (!int.TryParse(sedentaryText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sedentaryMinutes)
+            || sedentaryMinutes < 0 || sedentaryMinutes > 240)
+        {
+            ShowNotice("久坐提醒间隔必须是 0–240 分钟（0=关闭）。");
+            return;
+        }
+        var backgroundPath = BackgroundImageBox.Text.Trim();
+        if (!double.TryParse(BackgroundOpacityBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var backgroundOpacity)
+            || backgroundOpacity < 0 || backgroundOpacity > 1)
+        {
+            ShowNotice("背景图片透明度必须在 0–1 之间。");
+            return;
+        }
+        if (BackgroundImageCheck.IsChecked == true)
+        {
+            if (backgroundPath.Length == 0)
+            {
+                ShowNotice("请选择背景图片文件。");
+                return;
+            }
+            if (!File.Exists(backgroundPath))
+            {
+                ShowNotice("背景图片文件不存在，请重新选择。");
+                return;
+            }
+        }
+        var screenshotKey = (ScreenshotKeyBox.Text ?? "").Trim().ToUpperInvariant();
+        if (!PetSettings.ScreenshotKeys.Contains(screenshotKey))
+        {
+            ShowNotice("截图快捷键的按键无效，请填 A–Z、0–9 或 F1–F12。");
             return;
         }
         if (!double.TryParse(WorkBadgeScaleBox.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var workBadgeScale)
@@ -381,6 +489,21 @@ public partial class SettingsWindow : Window
         Settings.EdgeCollapseDistance = edgeDistance;
         Settings.EdgeHoverSeconds = edgeHoverSeconds;
         Settings.WaterReminderMinutes = waterMinutes;
+        Settings.SedentaryReminderEnabled = SedentaryCheck.IsChecked == true;
+        Settings.SedentaryMinutes = sedentaryMinutes;
+        Settings.AlarmsEnabled = AlarmsCheck.IsChecked == true;
+        Settings.Alarms = _alarms.Select(alarm => alarm.Clone()).ToList();
+        Settings.ClipboardHistoryEnabled = ClipboardCheck.IsChecked == true;
+        Settings.LockScreenEnabled = LockScreenCheck.IsChecked == true;
+        Settings.BackgroundImageEnabled = BackgroundImageCheck.IsChecked == true;
+        Settings.BackgroundImagePath = backgroundPath;
+        Settings.BackgroundImageOpacity = backgroundOpacity;
+        Settings.ScreenshotEnabled = ScreenshotCheck.IsChecked == true;
+        Settings.ScreenshotCtrl = ScreenshotCtrlCheck.IsChecked == true;
+        Settings.ScreenshotAlt = ScreenshotAltCheck.IsChecked == true;
+        Settings.ScreenshotShift = ScreenshotShiftCheck.IsChecked == true;
+        Settings.ScreenshotWin = ScreenshotWinCheck.IsChecked == true;
+        Settings.ScreenshotKey = screenshotKey;
         Settings.WorkDays = workDays;
         Settings.WorkStart = workStart.ToString(@"hh\:mm");
         Settings.WorkEnd = workEnd.ToString(@"hh\:mm");
@@ -408,7 +531,6 @@ public partial class SettingsWindow : Window
         Settings.MemoTextColor = memoTextColor;
         Settings.WeatherFontSize = weatherFontSize;
         Settings.SettingsButtonScale = settingsButtonScale;
-        Settings.MemoButtonScale = memoButtonScale;
         Settings.SpeechBubbleScale = speechBubbleScale;
         Settings.SpeechBubbleFontSize = speechBubbleFontSize;
         Settings.InputBadgeScale = inputBadgeScale;

@@ -262,19 +262,55 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,8,0">
                         <TextBlock Text="界面主题色（#RRGGBB）" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="ThemeColorBox"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ThemeColorBox"/>
+                            <Button Grid.Column="1" Content="选" Style="{StaticResource Action}"
+                                    Width="34" Margin="4,0,0,0" Tag="{Binding ElementName=ThemeColorBox}"
+                                    Click="OnPickColor"/>
+                        </Grid>
                     </StackPanel>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="状态栏文字颜色" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="StatusTextColorBox"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="StatusTextColorBox"/>
+                            <Button Grid.Column="1" Content="选" Style="{StaticResource Action}"
+                                    Width="34" Margin="4,0,0,0" Tag="{Binding ElementName=StatusTextColorBox}"
+                                    Click="OnPickColor"/>
+                        </Grid>
                     </StackPanel>
                     <StackPanel Grid.Row="1" Margin="0,5,8,0">
                         <TextBlock Text="设置文字颜色" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="SettingsTextColorBox"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SettingsTextColorBox"/>
+                            <Button Grid.Column="1" Content="选" Style="{StaticResource Action}"
+                                    Width="34" Margin="4,0,0,0" Tag="{Binding ElementName=SettingsTextColorBox}"
+                                    Click="OnPickColor"/>
+                        </Grid>
                     </StackPanel>
                     <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,5,0,0">
                         <TextBlock Text="备忘录文字颜色" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="MemoTextColorBox"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="MemoTextColorBox"/>
+                            <Button Grid.Column="1" Content="选" Style="{StaticResource Action}"
+                                    Width="34" Margin="4,0,0,0" Tag="{Binding ElementName=MemoTextColorBox}"
+                                    Click="OnPickColor"/>
+                        </Grid>
                     </StackPanel>
                 </Grid>
 
@@ -293,18 +329,58 @@
                         <TextBox x:Name="SettingsButtonScaleBox"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="备忘录按钮大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="MemoButtonScaleBox"/>
-                    </StackPanel>
-                    <StackPanel Grid.Row="1" Margin="0,5,8,0">
                         <TextBlock Text="互动气泡大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
                         <TextBox x:Name="SpeechBubbleScaleBox"/>
                     </StackPanel>
-                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,5,0,0">
+                    <StackPanel Grid.Row="1" Margin="0,5,8,0">
                         <TextBlock Text="键鼠状态大小（0.5–2）" Style="{StaticResource FieldLabel}"/>
                         <TextBox x:Name="InputBadgeScaleBox"/>
                     </StackPanel>
                 </Grid>
+
+                <TextBlock Text="主题背景" Style="{StaticResource Section}"/>
+                <CheckBox x:Name="BackgroundImageCheck" Content="启用背景图片（作为桌宠窗口背景）"/>
+                <Grid Margin="0,2,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="BackgroundImageBox" ToolTip="背景图片文件路径"/>
+                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}"
+                            Margin="6,0,0,0" Click="OnBrowseBackground"/>
+                </Grid>
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="背景图片透明度（0–1）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="BackgroundOpacityBox"/>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="截图" Style="{StaticResource Section}"/>
+                <CheckBox x:Name="ScreenshotCheck" Content="启用截图快捷键（Windows 全局）"/>
+                <Grid Margin="0,4,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox x:Name="ScreenshotCtrlCheck" Content="Ctrl" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="ScreenshotAltCheck" Grid.Column="1" Content="Alt" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="ScreenshotShiftCheck" Grid.Column="2" Content="Shift" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="ScreenshotWinCheck" Grid.Column="3" Content="Win" Margin="0,0,14,0"/>
+                    <TextBlock Grid.Column="4" Text="+ 按键" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBox x:Name="ScreenshotKeyBox" Grid.Column="5" Width="62" MaxLength="3"
+                             ToolTip="例如 A、5、F1"/>
+                </Grid>
+                <TextBlock Text="例如 Ctrl+Alt+A。截图时拖动选择区域，可拖动边缘调整，再编辑文字、线条、箭头、方框并保存为 PNG。"
+                           Foreground="#6F8CA6" FontSize="9" Margin="0,2,0,2" TextWrapping="Wrap"/>
 
                 <TextBlock Text="天气位置" Style="{StaticResource Section}"/>
                 <Grid Margin="0,3,0,0">
@@ -370,6 +446,35 @@
                 <CheckBox x:Name="ShowEndWorkReminderCheck" Content="显示下班时间提示"/>
                 <TextBlock Text="下班时间提示" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="WorkEndReminderBox"/>
+
+                <TextBlock Text="提醒与工具" Style="{StaticResource Section}"/>
+                <CheckBox x:Name="SedentaryCheck" Content="启用久坐提醒（通过角色气泡提示）"/>
+                <Grid Margin="0,2,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="久坐提醒间隔（分钟）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="SedentaryMinutesBox"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="0 = 关闭久坐提醒"
+                               Foreground="#6F8CA6" FontSize="9" VerticalAlignment="Bottom"
+                               Margin="0,0,0,7"/>
+                </Grid>
+                <CheckBox x:Name="AlarmsCheck" Content="启用闹钟提醒"/>
+                <Grid Margin="0,2,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="AlarmSummary" Foreground="#9AB6CE" FontSize="10"
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    <Button Grid.Column="1" Content="编辑闹钟…" Style="{StaticResource Action}"
+                            Margin="8,0,0,0" Click="OnEditAlarms"/>
+                </Grid>
+                <CheckBox x:Name="ClipboardCheck" Content="启用剪贴板历史（只记录文本，最多 50 条）"/>
+                <CheckBox x:Name="LockScreenCheck" Content="显示一键锁屏按钮"/>
 
                 <TextBlock Text="角色形象（每行一个路径，至少 1 张；支持绝对路径或相对本程序的 Assets 路径）" Style="{StaticResource Section}"/>
                 <TextBlock Text="主形象" Style="{StaticResource FieldLabel}"/>

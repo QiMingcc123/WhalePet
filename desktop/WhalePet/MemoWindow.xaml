@@ -63,6 +63,7 @@
             <Setter Property="BorderBrush" Value="#4D6BFE"/>
             <Setter Property="Foreground" Value="#FFFFFF"/>
         </Style>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <Style x:Key="PaperComboItem" TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="#3A2A18"/>
             <Setter Property="FontSize" Value="11"/>
@@ -167,7 +168,7 @@
                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                        ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                        ToolTipService.Placement="Top"/>
-            <TextBlock Text="提示：勾选对应备忘录可在互动中显示。"
+            <TextBlock Text="点击备忘录内容可在互动中显示，再次点击取消（文字下方出现红色细线）。"
                        Foreground="#6F5A3B" FontSize="10.5" FontWeight="SemiBold" Margin="0,3,0,0"/>
             <Grid Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
@@ -195,6 +196,22 @@
                     <ComboBoxItem Content="本月" Tag="month"/>
                 </ComboBox>
             </Grid>
+            <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="BulkTip" Text="" Foreground="#8A7656" FontSize="10"
+                           VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="BulkToggleButton" Content="批量删除" Style="{StaticResource Action}"
+                            Click="OnToggleBulk" ToolTip="进入批量删除模式"/>
+                    <Button x:Name="BulkSelectAllButton" Content="全选" Style="{StaticResource Action}"
+                            Click="OnSelectAll" Visibility="Collapsed"/>
+                    <Button x:Name="BulkDeleteButton" Content="删除选中" Style="{StaticResource Action}"
+                            Click="OnBulkDelete" Visibility="Collapsed"/>
+                </StackPanel>
+            </Grid>
         </StackPanel>
 
         <Border Grid.Row="1" Margin="0,12,0,10" Padding="10" CornerRadius="7"
@@ -210,33 +227,43 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <CheckBox IsChecked="{Binding Done, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              Tag="{Binding}" Click="OnToggleMemo"
-                                              Margin="0,2,8,0" ToolTip="勾选后会出现在点击互动中"/>
-                                    <StackPanel Grid.Column="1">
-                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                   FontSize="{DynamicResource MemoFontSize}"
-                                                   LineHeight="{DynamicResource MemoLineHeight}"
-                                                   LineStackingStrategy="BlockLineHeight"
-                                                   Foreground="{DynamicResource MemoTextBrush}"/>
-                                        <Border Height="1" Background="#C94B4B" Margin="0,1,0,0">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Done}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
-                                        <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="8" Foreground="#8A7656" Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                    <Button Grid.Column="2" Content="×" Tag="{Binding}" Click="OnDeleteMemo"
+                                    <CheckBox IsChecked="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              Margin="0,3,6,0" VerticalAlignment="Top"
+                                              Visibility="{Binding BulkMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}"
+                                              ToolTip="选中后使用“删除选中”批量删除"/>
+                                    <Border Grid.Column="1" Background="Transparent" Cursor="Hand"
+                                            Tag="{Binding}" MouseLeftButtonUp="OnMemoContentClick"
+                                            ToolTip="点击在互动中显示或取消（文字下方红线）">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                       FontSize="{DynamicResource MemoFontSize}"
+                                                       LineHeight="{DynamicResource MemoLineHeight}"
+                                                       LineStackingStrategy="BlockLineHeight"
+                                                       Foreground="{DynamicResource MemoTextBrush}"/>
+                                            <Border Height="1" Background="#C94B4B" Margin="0,1,0,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Done}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+                                            <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="8" Foreground="#8A7656" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Button Grid.Column="2" Content="✎" Tag="{Binding}" Click="OnEditMemo"
+                                            Style="{StaticResource Action}" Width="30" Height="30"
+                                            FontSize="14" Padding="0" Margin="6,0,0,0" VerticalAlignment="Top"
+                                            ToolTip="编辑备忘录"/>
+                                    <Button Grid.Column="3" Content="×" Tag="{Binding}" Click="OnDeleteMemo"
                                             Style="{StaticResource Action}" Width="34" Height="30"
-                                            FontSize="16" Padding="0" Margin="8,0,0,0" VerticalAlignment="Top"
+                                            FontSize="16" Padding="0" Margin="6,0,0,0" VerticalAlignment="Top"
                                             ToolTip="删除备忘录"/>
                                 </Grid>
                             </Border>

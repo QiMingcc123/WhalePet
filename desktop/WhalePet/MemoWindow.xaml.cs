@@ -1,14 +1,25 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace WhalePet;
 
 public partial class MemoWindow : Window
 {
+    public static readonly DependencyProperty BulkModeProperty = DependencyProperty.Register(
+        nameof(BulkMode), typeof(bool), typeof(MemoWindow), new PropertyMetadata(false));
+
     private readonly ObservableCollection<MemoItem> _memos;
     private readonly ListCollectionView _view;
+    private readonly string _themeColor;
+
+    public bool BulkMode
+    {
+        get => (bool)GetValue(BulkModeProperty);
+        set => SetValue(BulkModeProperty, value);
+    }
 
     public MemoWindow(PetSettings settings)
     {
@@ -19,6 +30,7 @@ public partial class MemoWindow : Window
         Resources["MemoLineHeight"] = lineHeight;
         Resources["PaperLines"] = CreatePaperBrush(lineHeight);
         var theme = Brush(settings.ThemeColor);
+        _themeColor = settings.ThemeColor;
         AddButton.Background = theme;
         AddButton.BorderBrush = theme;
         var scale = Math.Clamp(settings.MemoUiScale, 0.5, 2);
@@ -91,18 +103,90 @@ public partial class MemoWindow : Window
         UpdateHint();
     }
 
-    private void OnToggleMemo(object sender, RoutedEventArgs e)
+    private void OnMemoContentClick(object sender, MouseButtonEventArgs e)
     {
+        if (sender is not FrameworkElement { Tag: MemoItem memo }) return;
+        memo.Done = !memo.Done;
         MemoStore.Save(_memos);
+        UpdateHint();
+        e.Handled = true;
+    }
+
+    private void OnEditMemo(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: MemoItem memo }) return;
+        var dialog = new MemoEditWindow(memo.Text) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        memo.Text = dialog.EditedText;
+        MemoStore.Save(_memos);
+        _view.Refresh();
         UpdateHint();
     }
 
     private void OnDeleteMemo(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: MemoItem memo }) return;
+        if (!ConfirmDelete(1, memo.Text)) return;
         _memos.Remove(memo);
         MemoStore.Save(_memos);
         UpdateHint();
+    }
+
+    private void OnToggleBulk(object sender, RoutedEventArgs e)
+    {
+        BulkMode = !BulkMode;
+        BulkToggleButton.Content = BulkMode ? "退出批量" : "批量删除";
+        var visibility = BulkMode ? Visibility.Visible : Visibility.Collapsed;
+        BulkSelectAllButton.Visibility = visibility;
+        BulkDeleteButton.Visibility = visibility;
+        BulkSelectAllButton.Content = "全选";
+        BulkTip.Text = BulkMode ? "勾选要删除的备忘录，再点“删除选中”。" : "";
+        if (!BulkMode)
+        {
+            ClearSelection();
+        }
+        UpdateHint();
+    }
+
+    private void OnSelectAll(object sender, RoutedEventArgs e)
+    {
+        var visible = _view.Cast<MemoItem>().ToList();
+        var allSelected = visible.Count > 0 && visible.All(memo => memo.Selected);
+        foreach (var memo in visible) memo.Selected = !allSelected;
+        BulkSelectAllButton.Content = allSelected ? "全选" : "取消全选";
+        UpdateHint();
+    }
+
+    private void OnBulkDelete(object sender, RoutedEventArgs e)
+    {
+        var selected = _view.Cast<MemoItem>().Where(memo => memo.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            ErrorText.Text = "请先勾选要删除的备忘录。";
+            return;
+        }
+        if (!ConfirmDelete(selected.Count)) return;
+
+        foreach (var memo in selected) _memos.Remove(memo);
+        MemoStore.Save(_memos);
+        ErrorText.Text = "";
+        BulkSelectAllButton.Content = "全选";
+        UpdateHint();
+    }
+
+    private void ClearSelection()
+    {
+        if (_memos is null) return;
+        foreach (var memo in _memos) memo.Selected = false;
+        if (BulkMode) BulkSelectAllButton.Content = "全选";
+    }
+
+    private bool ConfirmDelete(int count, string? preview = null)
+    {
+        var message = count == 1 && !string.IsNullOrWhiteSpace(preview)
+            ? $"确定删除这条备忘录吗？\n\n{(preview.Length > 80 ? preview[..80] + "…" : preview)}"
+            : $"确定删除选中的 {count} 条备忘录吗？";
+        return ConfirmDialog.Show(this, message + "\n\n此操作不可恢复。", "确认删除", "删除", _themeColor);
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
@@ -116,6 +200,7 @@ public partial class MemoWindow : Window
                 : Visibility.Collapsed;
         }
         _view?.Refresh();
+        ClearSelection();
         UpdateHint();
     }
 
@@ -161,6 +246,7 @@ public partial class MemoWindow : Window
     {
         if (MemoTimeFilter is not null) MemoTimeFilter.IsDropDownOpen = false;
         _view?.Refresh();
+        ClearSelection();
         UpdateHint();
     }
 
@@ -168,8 +254,10 @@ public partial class MemoWindow : Window
     {
         var total = _memos?.Count ?? 0;
         var filtered = _view?.Count ?? total;
+        var selected = _memos?.Count(memo => memo.Selected) ?? 0;
         MemoHint.Text = $"保存在本机，共 {total} 条" +
             (filtered != total ? $" · 当前显示 {filtered} 条" : "") +
+            (BulkMode ? $" · 已选 {selected} 条" : "") +
             $" · 时间筛选：{TimeFilterLabel}" +
             $" · {MemoStore.FilePath}";
     }

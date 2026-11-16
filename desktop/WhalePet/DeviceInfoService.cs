@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace WhalePet;
 
-public sealed record DeviceSnapshot(string Memory, string Cpu, string Gpu, string Disk);
+public sealed record DeviceSnapshot(string Memory, string Cpu, string Gpu, string Disk, string Network);
 
 /// <summary>Best-effort local device information. Missing sensors are simply omitted.</summary>
 public static class DeviceInfoService
@@ -14,13 +15,19 @@ public static class DeviceInfoService
     private static ulong _lastTotal;
     private static bool _hasCpuBaseline;
 
+    private static long _lastBytesReceived;
+    private static long _lastBytesSent;
+    private static DateTime _lastNetworkSample;
+    private static bool _hasNetworkBaseline;
+
     public static DeviceSnapshot Capture()
     {
         return new DeviceSnapshot(
             ReadMemory(),
             ReadCpu(),
             ReadGpu(),
-            ReadDisk());
+            ReadDisk(),
+            ReadNetwork());
     }
 
     private static string ReadMemory()
@@ -187,6 +194,96 @@ public static class DeviceInfoService
         {
             return "";
         }
+    }
+
+    private static string ReadNetwork()
+    {
+        try
+        {
+            NetworkInterface? best = null;
+            foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (adapter.OperationalStatus != OperationalStatus.Up) continue;
+                if (adapter.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) continue;
+
+                try
+                {
+                    var hasGateway = adapter.GetIPProperties().GatewayAddresses
+                        .Any(gateway => gateway.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                                        && !gateway.Address.Equals(System.Net.IPAddress.Any));
+                    if (!hasGateway) continue;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (best is null || NetworkRank(adapter) < NetworkRank(best)) best = adapter;
+            }
+
+            if (best is null)
+            {
+                _hasNetworkBaseline = false;
+                return "网络 未连接";
+            }
+
+            long received;
+            long sent;
+            try
+            {
+                var stats = best.GetIPv4Statistics();
+                received = stats.BytesReceived;
+                sent = stats.BytesSent;
+            }
+            catch
+            {
+                return "网络 已连接";
+            }
+
+            var typeName = best.NetworkInterfaceType switch
+            {
+                NetworkInterfaceType.Wireless80211 => "Wi-Fi",
+                NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet => "以太网",
+                _ => "网络",
+            };
+
+            var now = DateTime.Now;
+            var status = $"网络 {typeName} 已连接";
+            if (!_hasNetworkBaseline || (now - _lastNetworkSample).TotalSeconds <= 0)
+            {
+                _hasNetworkBaseline = true;
+                _lastBytesReceived = received;
+                _lastBytesSent = sent;
+                _lastNetworkSample = now;
+                return status + " · ↓ — ↑ —";
+            }
+
+            var seconds = Math.Max(0.5, (now - _lastNetworkSample).TotalSeconds);
+            var down = Math.Max(0, received - _lastBytesReceived) / seconds;
+            var up = Math.Max(0, sent - _lastBytesSent) / seconds;
+            _lastBytesReceived = received;
+            _lastBytesSent = sent;
+            _lastNetworkSample = now;
+            return status + $" · ↓ {FormatSpeed(down)} ↑ {FormatSpeed(up)}";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static int NetworkRank(NetworkInterface adapter) => adapter.NetworkInterfaceType switch
+    {
+        NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet => 0,
+        NetworkInterfaceType.Wireless80211 => 1,
+        _ => 2,
+    };
+
+    private static string FormatSpeed(double bytesPerSecond)
+    {
+        if (bytesPerSecond >= 1024d * 1024d) return $"{bytesPerSecond / 1024d / 1024d:0.00} MB/s";
+        if (bytesPerSecond >= 1024d) return $"{bytesPerSecond / 1024d:0} KB/s";
+        return $"{bytesPerSecond:0} B/s";
     }
 
     private static ulong ToUInt64(FileTime value) => ((ulong)value.dwHighDateTime << 32) | value.dwLowDateTime;

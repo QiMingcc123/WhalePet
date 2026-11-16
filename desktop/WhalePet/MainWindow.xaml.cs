@@ -1,8 +1,10 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
@@ -22,6 +24,10 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _inputTimer;
     private readonly DispatcherTimer _deviceTimer;
+    private readonly DispatcherTimer _clipboardTimer;
+    private readonly DispatcherTimer _statusMarqueeTimer;
+    private bool _statusScrollPaused;
+    private int _statusScrollDirection = 1;
     private readonly WeatherService _weatherService = new();
     private readonly Random _random = new();
     private PetSettings _settings;
@@ -54,9 +60,20 @@ public partial class MainWindow : Window
     private bool _beforeWorkReminderShown;
     private bool _endWorkReminderShown;
     private DateTime _nextWaterReminder = DateTime.MinValue;
+    private DateTime _nextSedentary = DateTime.MinValue;
+    private readonly Dictionary<int, DateTime> _alarmFiredDates = new();
+    private readonly List<ClipboardEntry> _clipboardEntries = new();
+    private string? _lastClipboardText;
+    private bool _clipboardPrimed;
+    private bool _clipboardPaused;
     private bool _removableBusy;
     private readonly List<DriveInfo> _removableDrives = new();
     private WorkBadgeWindow? _workBadgeWindow;
+    private AlarmPopupWindow? _alarmPopupWindow;
+    private HwndSource? _hwndSource;
+    private IntPtr _hwnd;
+    private bool _screenshotHotkeyRegistered;
+    private const int ScreenshotHotkeyId = 0x5151;
     private bool _deviceInfoBusy;
     private EdgeSide _edgeSide = EdgeSide.None;
     private Rect _expandedBounds;
@@ -77,9 +94,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += OnSourceInitialized;
         _settings = SettingsStore.Load();
         _settings.Normalize();
         _nextWaterReminder = DateTime.Now.AddMinutes(_settings.WaterReminderMinutes);
+        _nextSedentary = DateTime.Now.AddMinutes(_settings.SedentaryMinutes > 0 ? _settings.SedentaryMinutes : 45);
+        _clipboardEntries.AddRange(ClipboardStore.Load());
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += OnTick;
         _timer.Start();
@@ -93,6 +113,12 @@ public partial class MainWindow : Window
             UpdateRemovableDevices();
         };
         _deviceTimer.Start();
+        _clipboardTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(900) };
+        _clipboardTimer.Tick += (_, _) => PollClipboard();
+        _clipboardTimer.Start();
+        _statusMarqueeTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(40) };
+        _statusMarqueeTimer.Tick += (_, _) => AdvanceStatusMarquee();
+        _statusMarqueeTimer.Start();
         _edgeLeaveTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(420) };
         _edgeLeaveTimer.Tick += OnEdgeLeaveTimer;
         ApplySettingsToUi();
@@ -112,6 +138,7 @@ public partial class MainWindow : Window
         RestorePosition();
         SetState(PetState.Main, true);
         ApplyAppearance();
+        PositionStatusActions();
         ShowGreeting();
         UpdateStatusText();
         UpdateWorkState();
@@ -122,6 +149,68 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(ApplyAppearance));
         _ = RefreshWeatherAsync();
     }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        _hwnd = new WindowInteropHelper(this).Handle;
+        _hwndSource = HwndSource.FromHwnd(_hwnd);
+        _hwndSource?.AddHook(WndProc);
+        RegisterScreenshotHotkey();
+    }
+
+    private void RegisterScreenshotHotkey()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        if (_screenshotHotkeyRegistered)
+        {
+            HotkeyManager.Unregister(_hwnd, ScreenshotHotkeyId);
+            _screenshotHotkeyRegistered = false;
+        }
+        if (!_settings.ScreenshotEnabled) return;
+
+        var modifiers = HotkeyManager.Modifiers(
+            _settings.ScreenshotCtrl,
+            _settings.ScreenshotAlt,
+            _settings.ScreenshotShift,
+            _settings.ScreenshotWin);
+        var key = HotkeyManager.VirtualKey(_settings.ScreenshotKey);
+        if (key == 0) return;
+        if (HotkeyManager.Register(_hwnd, ScreenshotHotkeyId, modifiers, key))
+        {
+            _screenshotHotkeyRegistered = true;
+        }
+        else
+        {
+            ShowSpeech("截图快捷键注册失败，可能已被其他程序占用。");
+        }
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == ScreenshotHotkeyId)
+        {
+            handled = true;
+            StartScreenshot();
+        }
+        return IntPtr.Zero;
+    }
+
+    private void StartScreenshot()
+    {
+        if (_closing || !_settings.ScreenshotEnabled) return;
+        try
+        {
+            var overlay = ScreenshotOverlayWindow.Create();
+            overlay.Show();
+            overlay.Activate();
+        }
+        catch (Exception error)
+        {
+            ShowSpeech("截图失败：" + error.Message);
+        }
+    }
+
+    private void OnScreenshotClick(object sender, RoutedEventArgs e) => StartScreenshot();
 
     private void OnGlobalKeyboard()
     {
@@ -225,7 +314,7 @@ public partial class MainWindow : Window
             if (DateTime.Now >= _playUntil)
             {
                 _playUntil = default;
-                EvaluateIdleState(idle);
+                SetState(idle.TotalMinutes >= _settings.IdleMinutes ? PetState.Idle : PetState.Main);
             }
         }
         else
@@ -247,6 +336,8 @@ public partial class MainWindow : Window
             _nextWaterReminder = now.AddMinutes(_settings.WaterReminderMinutes);
             ShowSpeech("该喝水啦，起来活动一下~");
         }
+        UpdateSedentaryReminder(idle, now);
+        UpdateAlarms(now);
         if (_settings.ChatIdleMinutes > 0
             && _state != PetState.Idle
             && _state != PetState.Play
@@ -263,6 +354,69 @@ public partial class MainWindow : Window
         }
 
         UpdateStatusText();
+    }
+
+    private void UpdateSedentaryReminder(TimeSpan idle, DateTime now)
+    {
+        var minutes = _settings.SedentaryMinutes;
+        if (!_settings.SedentaryReminderEnabled || minutes <= 0) return;
+        if (now < _nextSedentary) return;
+
+        // If the user has been away for a while, restart the sitting timer instead
+        // of nagging an empty chair.
+        if (idle.TotalMinutes >= 5)
+        {
+            _nextSedentary = now.AddMinutes(minutes);
+            return;
+        }
+        if (SpeechBubble.Visibility == Visibility.Visible) return;
+
+        _nextSedentary = now.AddMinutes(minutes);
+        ShowSpeech($"已经坐了 {minutes} 分钟啦，起来活动一下肩颈吧～");
+    }
+
+    private void UpdateAlarms(DateTime now)
+    {
+        if (!_settings.AlarmsEnabled || _settings.Alarms.Count == 0) return;
+        if (SpeechBubble.Visibility == Visibility.Visible) return;
+
+        var minuteOfDay = now.Hour * 60 + now.Minute;
+        for (var index = 0; index < _settings.Alarms.Count; index++)
+        {
+            var alarm = _settings.Alarms[index];
+            if (!alarm.Enabled || !TryParseClock(alarm.Start, out var start)) continue;
+            if (!alarm.IsDaily && !string.Equals(alarm.Date, now.ToString("yyyy-MM-dd"), StringComparison.Ordinal)) continue;
+
+            var hasEnd = TryParseClock(alarm.End, out var end) && end >= start;
+            if (minuteOfDay < start) continue;
+            if (hasEnd ? minuteOfDay > end : minuteOfDay > start) continue;
+            if (_alarmFiredDates.TryGetValue(index, out var fired) && fired.Date == now.Date) continue;
+
+            _alarmFiredDates[index] = now;
+            ShowSpeech($"⏰ {alarm.Text}");
+            if (alarm.Popup) ShowAlarmPopup(alarm);
+            break;
+        }
+    }
+
+    private static bool TryParseClock(string? value, out int minutes)
+    {
+        minutes = 0;
+        if (!TimeSpan.TryParseExact((value ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+        minutes = (int)parsed.TotalMinutes;
+        return minutes is >= 0 and < 1440;
+    }
+
+    private void ShowAlarmPopup(AlarmItem alarm)
+    {
+        _alarmPopupWindow?.Close();
+        var when = alarm.IsDaily ? $"每天 {alarm.Start}" : $"{alarm.Date} {alarm.Start}";
+        _alarmPopupWindow = new AlarmPopupWindow(alarm.Text, when, _settings.ThemeColor) { Owner = this };
+        _alarmPopupWindow.Closed += (_, _) => _alarmPopupWindow = null;
+        _alarmPopupWindow.Show();
     }
 
     private void UpdateWorkState()
@@ -368,14 +522,17 @@ public partial class MainWindow : Window
             DeviceCpuText.Text = snapshot.Cpu;
             DeviceGpuText.Text = snapshot.Gpu;
             DeviceDiskText.Text = snapshot.Disk;
+            DeviceNetworkText.Text = snapshot.Network;
             DeviceMemoryText.Visibility = string.IsNullOrWhiteSpace(snapshot.Memory) ? Visibility.Collapsed : Visibility.Visible;
             DeviceCpuText.Visibility = string.IsNullOrWhiteSpace(snapshot.Cpu) ? Visibility.Collapsed : Visibility.Visible;
             DeviceGpuText.Visibility = string.IsNullOrWhiteSpace(snapshot.Gpu) ? Visibility.Collapsed : Visibility.Visible;
             DeviceDiskText.Visibility = string.IsNullOrWhiteSpace(snapshot.Disk) ? Visibility.Collapsed : Visibility.Visible;
+            DeviceNetworkText.Visibility = string.IsNullOrWhiteSpace(snapshot.Network) ? Visibility.Collapsed : Visibility.Visible;
             var any = !string.IsNullOrWhiteSpace(snapshot.Memory)
                 || !string.IsNullOrWhiteSpace(snapshot.Cpu)
                 || !string.IsNullOrWhiteSpace(snapshot.Gpu)
-                || !string.IsNullOrWhiteSpace(snapshot.Disk);
+                || !string.IsNullOrWhiteSpace(snapshot.Disk)
+                || !string.IsNullOrWhiteSpace(snapshot.Network);
             DeviceInfoPanel.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
         catch
@@ -446,9 +603,97 @@ public partial class MainWindow : Window
     private void UpdateStatusActions()
     {
         UsbButton.Visibility = _settings.ShowRemovableDevices && _removableDrives.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        StatusActions.Visibility = _settings.ShowStatusBar && UsbButton.Visibility == Visibility.Visible
+        LockStatusButton.Visibility = _settings.ShowStatusBar && _settings.LockScreenEnabled ? Visibility.Visible : Visibility.Collapsed;
+        StatusActions.Visibility = _settings.ShowStatusBar
+            && (UsbButton.Visibility == Visibility.Visible || LockStatusButton.Visibility == Visibility.Visible)
             ? Visibility.Visible
             : Visibility.Collapsed;
+        PositionStatusActions();
+    }
+
+    private void PositionStatusActions()
+    {
+        if (StatusActions.Visibility != Visibility.Visible) return;
+        if (SummaryButton.ActualWidth <= 0 || Root.ActualWidth <= 0) return;
+
+        Root.UpdateLayout();
+        var actionsWidth = StatusActions.ActualWidth;
+        if (actionsWidth <= 0)
+        {
+            StatusActions.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            actionsWidth = StatusActions.DesiredSize.Width;
+        }
+
+        var statusWidth = SummaryButton.ActualWidth;
+        var statusLeft = SummaryButton.TranslatePoint(new Point(0, 0), Root).X;
+        var rootWidth = Root.ActualWidth;
+        var inside = statusWidth + actionsWidth + 8 > rootWidth;
+        var left = inside ? statusLeft + statusWidth - actionsWidth - 4 : statusLeft + statusWidth + 4;
+        StatusActions.Margin = new Thickness(Math.Max(0, left), -26, 0, 0);
+    }
+
+    private void OnStatusWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (StatusTextScroll.ScrollableWidth <= 0) return;
+        var offset = Math.Clamp(StatusTextScroll.HorizontalOffset - e.Delta, 0, StatusTextScroll.ScrollableWidth);
+        StatusTextScroll.ScrollToHorizontalOffset(offset);
+        e.Handled = true;
+    }
+
+    private void AdvanceStatusMarquee()
+    {
+        if (_closing || !_settings.ShowStatusBar || _statusScrollPaused) return;
+        var overflow = StatusTextScroll.ScrollableWidth;
+        if (overflow <= 1) return;
+
+        var offset = StatusTextScroll.HorizontalOffset + _statusScrollDirection * 1.4;
+        if (offset >= overflow)
+        {
+            offset = overflow;
+            _statusScrollDirection = -1;
+        }
+        else if (offset <= 0)
+        {
+            offset = 0;
+            _statusScrollDirection = 1;
+        }
+        StatusTextScroll.ScrollToHorizontalOffset(offset);
+    }
+
+    private void OnStatusTextMouseEnter(object sender, MouseEventArgs e)
+    {
+        _statusScrollPaused = true;
+        if (StatusTextScroll.ScrollableWidth > 1)
+        {
+            StatusTextScroll.ToolTip = "已暂停滚动，鼠标移开后继续";
+        }
+    }
+
+    private void OnStatusTextMouseLeave(object sender, MouseEventArgs e)
+    {
+        _statusScrollPaused = false;
+        if (StatusTextScroll.ScrollableWidth > 1)
+        {
+            StatusTextScroll.ToolTip = "鼠标悬停暂停滚动";
+        }
+    }
+
+    private void RefreshStatusMarquee()
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (_closing) return;
+            var scrollable = StatusTextScroll.ScrollableWidth > 1;
+            StatusTextScroll.Cursor = scrollable ? Cursors.Hand : Cursors.Arrow;
+            StatusTextScroll.ToolTip = scrollable
+                ? (_statusScrollPaused ? "已暂停滚动，鼠标移开后继续" : "鼠标悬停暂停滚动")
+                : null;
+            if (!scrollable)
+            {
+                _statusScrollPaused = false;
+                StatusTextScroll.ScrollToHorizontalOffset(0);
+            }
+        }));
     }
 
     private void OnUsbClick(object sender, RoutedEventArgs e)
@@ -915,6 +1160,7 @@ public partial class MainWindow : Window
             : $"空闲 {idle.TotalMinutes:0.0} 分钟 · 距离休眠约 {TimeSpan.FromSeconds(remain):mm\\:ss}";
         ConfigText.Text = "配置：" + SettingsStore.ConfigPath;
         SummaryChevron.Text = _detailsOpen ? "▴" : "▾";
+        RefreshStatusMarquee();
     }
 
     private void OnSummaryClick(object sender, RoutedEventArgs e)
@@ -962,6 +1208,8 @@ public partial class MainWindow : Window
         _lastWeatherFetch = DateTime.MinValue;
         SetState(PetState.Main, true);
         _nextWaterReminder = DateTime.Now.AddMinutes(_settings.WaterReminderMinutes);
+        _nextSedentary = DateTime.Now.AddMinutes(Math.Max(1, _settings.SedentaryMinutes));
+        _alarmFiredDates.Clear();
         ShowSpeech("设置已保存。");
         UpdateStatusText();
         _ = RefreshWeatherAsync();
@@ -986,7 +1234,82 @@ public partial class MainWindow : Window
     private void UpdateMemoCount()
     {
         _memoCount = MemoStore.Load().Count;
-        MemoButton.ToolTip = _memoCount > 0 ? $"备忘录（{_memoCount} 条）" : "备忘录";
+    }
+
+    private void PollClipboard()
+    {
+        if (_closing || _clipboardPaused || !_settings.ClipboardHistoryEnabled) return;
+
+        string text;
+        try
+        {
+            if (!Clipboard.ContainsText()) return;
+            text = Clipboard.GetText() ?? "";
+        }
+        catch
+        {
+            return;
+        }
+
+        text = text.Trim();
+        if (text.Length == 0) return;
+        if (!_clipboardPrimed)
+        {
+            _clipboardPrimed = true;
+            _lastClipboardText = text;
+            return;
+        }
+        if (string.Equals(text, _lastClipboardText, StringComparison.Ordinal)) return;
+
+        _lastClipboardText = text;
+        if (text.Length > 4000) text = text[..4000];
+
+        _clipboardEntries.RemoveAll(entry => string.Equals(entry.Text, text, StringComparison.Ordinal));
+        _clipboardEntries.Insert(0, new ClipboardEntry { Text = text, CreatedAt = DateTime.Now });
+        while (_clipboardEntries.Count > ClipboardStore.MaxEntries)
+        {
+            _clipboardEntries.RemoveAt(_clipboardEntries.Count - 1);
+        }
+        ClipboardStore.Save(_clipboardEntries);
+        ClipboardHistoryButton.ToolTip = $"剪贴板历史（{_clipboardEntries.Count} 条）";
+    }
+
+    private void OnClipboardHistoryClick(object sender, RoutedEventArgs e)
+    {
+        _suppressEdgeCollapse = true;
+        _clipboardPaused = true;
+        try
+        {
+            new ClipboardWindow { Owner = this }.ShowDialog();
+        }
+        finally
+        {
+            _clipboardPaused = false;
+            _suppressEdgeCollapse = false;
+        }
+
+        _clipboardEntries.Clear();
+        _clipboardEntries.AddRange(ClipboardStore.Load());
+        ClipboardHistoryButton.ToolTip = $"剪贴板历史（{_clipboardEntries.Count} 条）";
+    }
+
+    private void OnLockScreenClick(object sender, RoutedEventArgs e)
+    {
+        if (!Native.LockScreen()) ShowSpeech("锁屏失败，请检查系统权限。");
+    }
+
+    private void OnAlarmsClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new AlarmWindow(_settings.Alarms) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        _settings.Alarms = dialog.Alarms;
+        SettingsStore.Save(_settings);
+        _alarmFiredDates.Clear();
+        ShowSpeech(_settings.Alarms.Count == 0
+            ? "闹钟已清空。"
+            : $"闹钟已更新（{_settings.Alarms.Count} 个）。");
+        UpdateStatusText();
     }
 
     private void OnToggleStatusClick(object sender, RoutedEventArgs e)
@@ -1069,6 +1392,17 @@ public partial class MainWindow : Window
         if (!_settings.AutoHideAtEdge && _collapsedAtEdge) ExpandFromEdge();
         if (_settings.ShowDeviceInfo) RefreshDeviceInfo();
         else DeviceInfoPanel.Visibility = Visibility.Collapsed;
+
+        ClipboardHistoryButton.Visibility = _settings.ClipboardHistoryEnabled ? Visibility.Visible : Visibility.Collapsed;
+        LockScreenButton.Visibility = _settings.LockScreenEnabled ? Visibility.Visible : Visibility.Collapsed;
+        AlarmButton.Visibility = _settings.AlarmsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        ScreenshotButton.Visibility = _settings.ScreenshotEnabled ? Visibility.Visible : Visibility.Collapsed;
+        ClipboardMenuItem.Visibility = ClipboardHistoryButton.Visibility;
+        LockMenuItem.Visibility = LockScreenButton.Visibility;
+        AlarmMenuItem.Visibility = AlarmButton.Visibility;
+        ScreenshotMenuItem.Visibility = ScreenshotButton.Visibility;
+        ClipboardHistoryButton.ToolTip = $"剪贴板历史（{_clipboardEntries.Count} 条）";
+        RegisterScreenshotHotkey();
     }
 
     private void ApplyAppearance()
@@ -1085,24 +1419,54 @@ public partial class MainWindow : Window
             text.Foreground = textBrush;
             text.FontSize = Math.Max(8, _settings.StatusFontSize - 0.5);
         }
+        foreach (var button in FindVisualChildren<Button>(DetailsPanel))
+        {
+            button.Foreground = textBrush;
+            button.FontSize = Math.Max(8, _settings.StatusFontSize - 0.5);
+        }
         SummaryButton.BorderBrush = theme;
         DetailsPanel.BorderBrush = theme;
         WeatherPill.BorderBrush = theme;
         GearButton.BorderBrush = theme;
-        MemoButton.BorderBrush = theme;
         WorkBadge.BorderBrush = theme;
+
+        var themeColor = ThemePalette.Parse(_settings.ThemeColor, Color.FromRgb(0x4D, 0x6B, 0xFE));
+        var surface = ThemePalette.Surface(
+            _settings.ThemeColor,
+            _settings.BackgroundImageEnabled,
+            _settings.BackgroundImagePath,
+            _settings.BackgroundImageOpacity,
+            0.22);
+        SummaryButton.Background = surface;
+        DetailsPanel.Background = surface;
+        WeatherPill.Background = ThemePalette.Panel(_settings.ThemeColor, 0.88, 0.25);
+        GearButton.Background = ThemePalette.Panel(_settings.ThemeColor, 0.95, 0.25);
+        LockStatusButton.Background = ThemePalette.Panel(_settings.ThemeColor, 0.95, 0.25);
+        UsbButton.Background = ThemePalette.Panel(_settings.ThemeColor, 0.95, 0.25);
+        InputBadge.Background = ThemePalette.Panel(_settings.ThemeColor, 0.90, 0.25);
+        CollapsedTab.Background = ThemePalette.Panel(_settings.ThemeColor, 0.95, 0.22);
+        CollapsedTab.BorderBrush = theme;
+        WorkBadge.Background = ThemePalette.Brush(
+            ThemePalette.Blend(themeColor, Color.FromRgb(0xFF, 0xF8, 0xEA), 0.10), 0.95);
+
+        Resources["MenuBackground"] = ThemePalette.Panel(_settings.ThemeColor, 0.98, 0.22);
+        Resources["MenuBorder"] = ThemePalette.Brush(ThemePalette.Lighten(themeColor, 0.35), 0.80);
+        Resources["MenuForeground"] = textBrush;
+        Resources["MenuHover"] = ThemePalette.Brush(themeColor, 0.24);
+        Resources["MenuSeparator"] = ThemePalette.Brush(themeColor, 0.35);
+
         WorkBadgeText.FontSize = _settings.WorkBadgeFontSize;
         WorkBadgeScale.ScaleX = _settings.WorkBadgeScale;
         WorkBadgeScale.ScaleY = _settings.WorkBadgeScale;
-        InputBadge.Margin = new Thickness(8, 10 + 28 * _settings.MemoButtonScale, 0, 0);
+        InputBadge.Margin = new Thickness(8, 8, 0, 0);
         SettingsButtonScale.ScaleX = _settings.SettingsButtonScale;
         SettingsButtonScale.ScaleY = _settings.SettingsButtonScale;
-        MemoButtonScale.ScaleX = _settings.MemoButtonScale;
-        MemoButtonScale.ScaleY = _settings.MemoButtonScale;
         SpeechBubbleScale.ScaleX = _settings.SpeechBubbleScale;
         SpeechBubbleScale.ScaleY = _settings.SpeechBubbleScale;
         SpeechText.FontSize = _settings.SpeechBubbleFontSize;
-        SpeechBubble.MaxWidth = Math.Max(180, 310 / Math.Max(0.5, _settings.SpeechBubbleScale));
+        var rootWidth = Root.ActualWidth > 10 ? Root.ActualWidth : 430;
+        var availableBubble = Math.Max(150, Math.Min(310, rootWidth - 24));
+        SpeechBubble.MaxWidth = Math.Max(150, availableBubble / Math.Max(0.5, _settings.SpeechBubbleScale));
         InputBadgeScale.ScaleX = _settings.InputBadgeScale;
         InputBadgeScale.ScaleY = _settings.InputBadgeScale;
     }
@@ -1142,11 +1506,13 @@ public partial class MainWindow : Window
         ControlLayer.Width = 430 * _settings.CharacterScale;
         var statusWidth = 430 * _settings.StatusBarScale;
         SummaryButton.Width = statusWidth;
-        SummaryButton.MinHeight = 38 * _settings.StatusBarScale;
-        DetailsPanel.Width = Math.Max(430, statusWidth);
+        SummaryButton.MinHeight = Math.Max(38 * _settings.StatusBarScale, _settings.StatusFontSize + 18);
+        DetailsPanel.Width = statusWidth;
         var contentWidth = Math.Max(430 * _settings.CharacterScale, Math.Max(430, statusWidth));
         Width = contentWidth * _settings.Scale;
         UpdateLayout();
+        PositionStatusActions();
+        RefreshStatusMarquee();
         if (!double.IsNaN(previousBottom))
         {
             _adjustingPosition = true;
@@ -1220,10 +1586,14 @@ public partial class MainWindow : Window
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!_loaded || _adjustingPosition || double.IsNaN(_anchorBottom) || e.HeightChanged == false) return;
-        _adjustingPosition = true;
-        Top = ClampTop(_anchorBottom - ActualHeight);
-        _adjustingPosition = false;
+        if (!_loaded || _adjustingPosition || double.IsNaN(_anchorBottom)) return;
+        if (e.HeightChanged)
+        {
+            _adjustingPosition = true;
+            Top = ClampTop(_anchorBottom - ActualHeight);
+            _adjustingPosition = false;
+        }
+        if (e.WidthChanged || e.HeightChanged) PositionStatusActions();
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -1232,10 +1602,16 @@ public partial class MainWindow : Window
         _timer.Stop();
         _inputTimer.Stop();
         _deviceTimer.Stop();
+        _clipboardTimer.Stop();
+        _statusMarqueeTimer.Stop();
         _edgeLeaveTimer.Stop();
         _workBadgeWindow?.Close();
         _workBadgeWindow = null;
+        _alarmPopupWindow?.Close();
+        _alarmPopupWindow = null;
         _inputHook?.Dispose();
+        HotkeyManager.Unregister(_hwnd, ScreenshotHotkeyId);
+        _hwndSource?.RemoveHook(WndProc);
         _weatherCts?.Cancel();
         _weatherCts?.Dispose();
         SaveWindowPosition();

@@ -59,8 +59,8 @@
         </Style>
 
         <Style x:Key="SmallButton" TargetType="Button">
-            <Setter Property="Padding" Value="9,4"/>
-            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Padding" Value="7,4"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
             <Setter Property="Background" Value="#0F8FD3FF"/>
             <Setter Property="Foreground" Value="#CFEAFF"/>
             <Setter Property="BorderBrush" Value="#4D8FD3FF"/>
@@ -88,6 +88,74 @@
             </Setter>
         </Style>
 
+        <SolidColorBrush x:Key="MenuBackground" Color="#F2081A32"/>
+        <SolidColorBrush x:Key="MenuBorder" Color="#4D8FD3FF"/>
+        <SolidColorBrush x:Key="MenuForeground" Color="#DFF2FF"/>
+        <SolidColorBrush x:Key="MenuHover" Color="#248FD3FF"/>
+        <SolidColorBrush x:Key="MenuSeparator" Color="#2A8FD3FF"/>
+
+        <Style x:Key="PetContextMenu" TargetType="ContextMenu">
+            <Setter Property="Background" Value="{DynamicResource MenuBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MenuBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource MenuForeground}"/>
+            <Setter Property="Padding" Value="5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.4" Color="#000714"/>
+                            </Border.Effect>
+                            <ItemsPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PetMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{DynamicResource MenuForeground}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Surface"
+                                Background="Transparent"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource MenuHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PetSeparator" TargetType="Separator">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Background="{DynamicResource MenuSeparator}" Margin="8,4"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SummaryButton" TargetType="Button">
             <Setter Property="Background" Value="#F2091B36"/>
             <Setter Property="BorderBrush" Value="#478FD3FF"/>
@@ -109,7 +177,6 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Surface" Property="BorderBrush" Value="#998FD3FF"/>
-                                <Setter TargetName="Surface" Property="Background" Value="#F20C2444"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -124,13 +191,17 @@
             <ScaleTransform x:Name="RootScale" ScaleX="1" ScaleY="1"/>
         </Grid.LayoutTransform>
         <Grid.ContextMenu>
-            <ContextMenu>
-                <MenuItem Header="备忘录..." Click="OnMemoClick"/>
-                <MenuItem Header="设置..." Click="OnSettingsClick"/>
-                <MenuItem Header="显示 / 隐藏状态栏" Click="OnToggleStatusClick"/>
-                <MenuItem Header="重置到右下角" Click="OnResetPositionClick"/>
-                <Separator/>
-                <MenuItem Header="退出" Click="OnExitClick"/>
+            <ContextMenu Style="{StaticResource PetContextMenu}">
+                <MenuItem Style="{StaticResource PetMenuItem}" Header="备忘录..." Click="OnMemoClick"/>
+                <MenuItem Style="{StaticResource PetMenuItem}" Header="设置..." Click="OnSettingsClick"/>
+                <MenuItem x:Name="AlarmMenuItem" Style="{StaticResource PetMenuItem}" Header="闹钟提醒..." Click="OnAlarmsClick"/>
+                <MenuItem x:Name="ClipboardMenuItem" Style="{StaticResource PetMenuItem}" Header="剪贴板历史..." Click="OnClipboardHistoryClick"/>
+                <MenuItem x:Name="ScreenshotMenuItem" Style="{StaticResource PetMenuItem}" Header="截图..." Click="OnScreenshotClick"/>
+                <MenuItem x:Name="LockMenuItem" Style="{StaticResource PetMenuItem}" Header="锁屏" Click="OnLockScreenClick"/>
+                <MenuItem Style="{StaticResource PetMenuItem}" Header="显示 / 隐藏状态栏" Click="OnToggleStatusClick"/>
+                <MenuItem Style="{StaticResource PetMenuItem}" Header="重置到右下角" Click="OnResetPositionClick"/>
+                <Separator Style="{StaticResource PetSeparator}"/>
+                <MenuItem Style="{StaticResource PetMenuItem}" Header="退出" Click="OnExitClick"/>
             </ContextMenu>
         </Grid.ContextMenu>
 
@@ -144,8 +215,8 @@
 
         <Border x:Name="WeatherPill"
                 Grid.Row="0"
-                HorizontalAlignment="Right"
-                Margin="0,0,2,2"
+                HorizontalAlignment="Center"
+                Margin="0,0,0,2"
                 Padding="10,5"
                 CornerRadius="11"
                 Background="#D9081A32"
@@ -161,8 +232,8 @@
         <Border x:Name="SpeechBubble"
                 Grid.Row="1"
                 Panel.ZIndex="20"
-                HorizontalAlignment="Right"
-                Margin="0,2,8,0"
+                HorizontalAlignment="Center"
+                Margin="0,2,0,0"
                 Padding="11,8"
                 MaxWidth="310"
                 CornerRadius="13,13,4,13"
@@ -170,7 +241,7 @@
                 BorderBrush="#330B1B3A"
                 BorderThickness="1"
                 Visibility="Collapsed"
-                RenderTransformOrigin="1,0">
+                RenderTransformOrigin="0.5,0">
             <Border.RenderTransform>
                 <ScaleTransform x:Name="SpeechBubbleScale" ScaleX="1" ScaleY="1"/>
             </Border.RenderTransform>
@@ -239,7 +310,7 @@
             <Border x:Name="InputBadge"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Top"
-                    Margin="8,42,0,0"
+                    Margin="8,8,0,0"
                     Padding="7,4"
                     CornerRadius="8"
                     Background="#C4091B36"
@@ -268,19 +339,6 @@
                 </StackPanel>
             </Border>
 
-            <Button x:Name="MemoButton"
-                    Style="{StaticResource IconButton}"
-                    Content="📝"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Top"
-                    Margin="8,8,0,0"
-                    ToolTip="备忘录"
-                    Click="OnMemoClick"
-                    RenderTransformOrigin="0,0">
-                <Button.RenderTransform>
-                    <ScaleTransform x:Name="MemoButtonScale" ScaleX="1" ScaleY="1"/>
-                </Button.RenderTransform>
-            </Button>
             <Button x:Name="GearButton"
                     Style="{StaticResource IconButton}"
                     Content="⚙"
@@ -340,13 +398,22 @@
                          Fill="#58E0B4"
                          Margin="0,0,7,0"
                          VerticalAlignment="Center"/>
-                <TextBlock x:Name="SummaryText"
-                           Grid.Column="1"
-                           Foreground="#EAF6FF"
-                           FontSize="10.5"
-                           TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center"
-                           Text="鲸鱼娘 · 正在加载…"/>
+                <ScrollViewer x:Name="StatusTextScroll"
+                              Grid.Column="1"
+                              VerticalScrollBarVisibility="Disabled"
+                              HorizontalScrollBarVisibility="Hidden"
+                              Focusable="False"
+                              PanningMode="HorizontalOnly"
+                              VerticalAlignment="Center"
+                              MouseEnter="OnStatusTextMouseEnter"
+                              MouseLeave="OnStatusTextMouseLeave">
+                    <TextBlock x:Name="SummaryText"
+                               Foreground="#EAF6FF"
+                               FontSize="10.5"
+                               TextWrapping="NoWrap"
+                               VerticalAlignment="Center"
+                               Text="鲸鱼娘 · 正在加载…"/>
+                </ScrollViewer>
                 <TextBlock x:Name="SummaryChevron"
                            Grid.Column="2"
                            Foreground="#7FA5C5"
@@ -360,12 +427,20 @@
         <StackPanel x:Name="StatusActions"
                     Grid.Row="3"
                     Orientation="Horizontal"
-                    HorizontalAlignment="Right"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Center"
-                    Margin="0,-26,6,0"
+                    Margin="0,-26,0,0"
                     Panel.ZIndex="2">
+            <Button x:Name="LockStatusButton"
+                    Style="{StaticResource IconButton}"
+                    Content="🔒"
+                    ToolTip="一键锁屏"
+                    Visibility="Collapsed"
+                    Click="OnLockScreenClick"
+                    VerticalAlignment="Center"
+                    Margin="0,0,4,0"/>
             <Button x:Name="UsbButton"
-                    Style="{StaticResource SmallButton}"
+                    Style="{StaticResource IconButton}"
                     Content="🔌"
                     ToolTip="移动设备"
                     Visibility="Collapsed"
@@ -385,50 +460,59 @@
                 BorderBrush="#3D8FD3FF"
                 BorderThickness="1"
                 Visibility="Collapsed">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="230">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="桌面状态" Foreground="#DFF2FF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Style="{StaticResource SmallButton}" Content="备忘录" Click="OnMemoClick"/>
-                            <Button Style="{StaticResource SmallButton}" Content="设置" Click="OnSettingsClick"/>
-                            <Button Style="{StaticResource SmallButton}" Content="刷新天气" Click="OnRefreshWeatherClick"/>
+            <StackPanel>
+                <TextBlock Text="功能" Foreground="#8FD3FF" FontSize="9" FontWeight="Bold"/>
+                <WrapPanel Margin="0,5,0,6">
+                    <Button Style="{StaticResource SmallButton}" Content="备忘录" Click="OnMemoClick"/>
+                    <Button Style="{StaticResource SmallButton}" Content="设置" Click="OnSettingsClick"/>
+                    <Button Style="{StaticResource SmallButton}" Content="天气" Click="OnRefreshWeatherClick"/>
+                    <Button x:Name="AlarmButton" Style="{StaticResource SmallButton}" Content="闹钟"
+                            Click="OnAlarmsClick" Visibility="Collapsed"/>
+                    <Button x:Name="ClipboardHistoryButton" Style="{StaticResource SmallButton}" Content="剪贴板"
+                            Click="OnClipboardHistoryClick" Visibility="Collapsed"/>
+                    <Button x:Name="ScreenshotButton" Style="{StaticResource SmallButton}" Content="截图"
+                            Click="OnScreenshotClick" Visibility="Collapsed"/>
+                    <Button x:Name="LockScreenButton" Style="{StaticResource SmallButton}" Content="锁屏"
+                            Click="OnLockScreenClick" Visibility="Collapsed"/>
+                </WrapPanel>
+                <Border Height="1" Background="#1F8FD3FF" Margin="0,0,0,6"/>
+                <ScrollViewer x:Name="DetailsScroll"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              MaxHeight="210">
+                    <StackPanel>
+                        <TextBlock Text="桌面状态" Foreground="#DFF2FF" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                        <TextBlock x:Name="ClockText" Foreground="#CFEAFF" FontSize="10" Margin="0,0,0,3"/>
+                        <TextBlock x:Name="StateText" Foreground="#9AB6CE" FontSize="9.5" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                        <TextBlock x:Name="IdleText" Foreground="#9AB6CE" FontSize="9.5" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                        <TextBlock x:Name="WeatherDetailText"
+                                   Foreground="#9AB6CE"
+                                   FontSize="9.5"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2,0,4"/>
+                        <StackPanel x:Name="DeviceInfoPanel" Visibility="Collapsed" Margin="0,2,0,5">
+                            <TextBlock Text="设备信息" Foreground="#DFF2FF" FontSize="10" FontWeight="Bold" Margin="0,0,0,3"/>
+                            <TextBlock x:Name="DeviceMemoryText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="DeviceCpuText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="DeviceGpuText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="DeviceDiskText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="DeviceNetworkText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap"/>
                         </StackPanel>
-                    </Grid>
-                    <Border Height="1" Background="#1F8FD3FF" Margin="0,8,0,7"/>
-                    <TextBlock x:Name="ClockText" Foreground="#CFEAFF" FontSize="10" Margin="0,0,0,3"/>
-                    <TextBlock x:Name="StateText" Foreground="#9AB6CE" FontSize="9.5" Margin="0,0,0,2"/>
-                    <TextBlock x:Name="IdleText" Foreground="#9AB6CE" FontSize="9.5" Margin="0,0,0,2"/>
-                    <TextBlock x:Name="WeatherDetailText"
-                               Foreground="#9AB6CE"
-                               FontSize="9.5"
-                               TextWrapping="Wrap"
-                               Margin="0,2,0,4"/>
-                    <StackPanel x:Name="DeviceInfoPanel" Visibility="Collapsed" Margin="0,2,0,5">
-                        <TextBlock Text="设备信息" Foreground="#DFF2FF" FontSize="10" FontWeight="Bold" Margin="0,0,0,3"/>
-                        <TextBlock x:Name="DeviceMemoryText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
-                        <TextBlock x:Name="DeviceCpuText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
-                        <TextBlock x:Name="DeviceGpuText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap" Margin="0,0,0,2"/>
-                        <TextBlock x:Name="DeviceDiskText" Foreground="#9AB6CE" FontSize="9" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ConfigText"
+                                   Foreground="#6F8CA6"
+                                   FontSize="8.5"
+                                   TextWrapping="Wrap"
+                                   Cursor="Hand"
+                                   ToolTipService.ShowDuration="20000"
+                                   MouseLeftButtonUp="OnConfigPathClick"
+                                   MouseRightButtonUp="OnConfigPathRightClick"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Style="{StaticResource SmallButton}" Content="重置位置" Click="OnResetPositionClick"/>
+                            <Button Style="{StaticResource SmallButton}" Content="退出" Click="OnExitClick"/>
+                        </StackPanel>
                     </StackPanel>
-                    <TextBlock x:Name="ConfigText"
-                               Foreground="#6F8CA6"
-                               FontSize="8.5"
-                               TextWrapping="Wrap"
-                               Cursor="Hand"
-                               ToolTipService.ShowDuration="20000"
-                               MouseLeftButtonUp="OnConfigPathClick"
-                               MouseRightButtonUp="OnConfigPathRightClick"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Style="{StaticResource SmallButton}" Content="重置位置" Click="OnResetPositionClick"/>
-                        <Button Style="{StaticResource SmallButton}" Content="退出" Click="OnExitClick"/>
-                    </StackPanel>
-                </StackPanel>
-            </ScrollViewer>
+                </ScrollViewer>
+            </StackPanel>
         </Border>
     </Grid>
 
