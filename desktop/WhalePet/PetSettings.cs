@@ -40,9 +40,11 @@ public sealed class PetSettings
     public double EdgeHoverSeconds { get; set; } = 3.0;
     public double MemoUiScale { get; set; } = 1.0;
     public bool ShowWaterReminder { get; set; } = true;
+    public bool WaterPopupEnabled { get; set; } = true;
     public int WaterReminderMinutes { get; set; } = 30;
 
     public bool SedentaryReminderEnabled { get; set; } = false;
+    public bool SedentaryPopupEnabled { get; set; } = true;
     public int SedentaryMinutes { get; set; } = 45;
     public bool AlarmsEnabled { get; set; } = false;
     public List<AlarmItem> Alarms { get; set; } = new();
@@ -153,8 +155,10 @@ public sealed class PetSettings
             EdgeHoverSeconds = EdgeHoverSeconds,
             MemoUiScale = MemoUiScale,
             ShowWaterReminder = ShowWaterReminder,
+            WaterPopupEnabled = WaterPopupEnabled,
             WaterReminderMinutes = WaterReminderMinutes,
             SedentaryReminderEnabled = SedentaryReminderEnabled,
+            SedentaryPopupEnabled = SedentaryPopupEnabled,
             SedentaryMinutes = SedentaryMinutes,
             AlarmsEnabled = AlarmsEnabled,
             Alarms = Alarms.Select(alarm => alarm.Clone()).ToList(),

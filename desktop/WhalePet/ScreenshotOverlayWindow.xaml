@@ -18,17 +18,17 @@
             <Setter Property="Foreground" Value="#EAF6FF"/>
             <Setter Property="BorderBrush" Value="#4D8FD3FF"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Padding" Value="10,5"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Margin" Value="0,0,5,5"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Surface" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
@@ -42,6 +42,17 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#E6081A32"/>
+            <Setter Property="Foreground" Value="#EAF6FF"/>
+            <Setter Property="BorderBrush" Value="#4D8FD3FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="3,2"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="CaretBrush" Value="#EAF6FF"/>
+        </Style>
     </Window.Resources>
 
     <Grid x:Name="RootGrid" Background="Transparent"
@@ -51,6 +62,7 @@
         <Image x:Name="ScreenImage" Stretch="Fill" IsHitTestVisible="False"/>
         <Border x:Name="DimAll" Background="#99000000" IsHitTestVisible="False"/>
         <Image x:Name="BrightImage" Stretch="Fill" IsHitTestVisible="False"/>
+        <Canvas x:Name="AnnotationCanvas" IsHitTestVisible="True"/>
 
         <Canvas x:Name="Overlay" IsHitTestVisible="False">
             <Border x:Name="SelectionBorder" BorderBrush="#FF62C3FF" BorderThickness="1.5"
@@ -69,20 +81,48 @@
             </Border>
         </Canvas>
 
-        <Border x:Name="Toolbar" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,18,0,0"
-                Padding="14,8" CornerRadius="10" Background="#F2081A32"
+        <Border x:Name="Toolbar" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,12,0,0"
+                Padding="12,8" CornerRadius="10" Background="#F2081A32"
                 BorderBrush="#4D8FD3FF" BorderThickness="1"
                 MouseLeftButtonDown="OnToolbarMouseDown">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.4" Color="#000714"/>
             </Border.Effect>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="HintText" Text="拖动选择截图区域，可拖动边缘调整"
-                           Foreground="#CFEAFF" FontSize="11" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                <Button Content="取消" Style="{StaticResource OverlayButton}" Click="OnCancel"/>
-                <Button x:Name="ConfirmButton" Content="编辑截图" Style="{StaticResource OverlayButton}"
-                        Click="OnConfirm" Background="#4D6BFE" BorderBrush="#4D6BFE"
-                        Foreground="#FFFFFF"/>
+            <StackPanel>
+                <DockPanel LastChildFill="True" Margin="0,0,0,2">
+                    <Button DockPanel.Dock="Right" Content="取消" Style="{StaticResource OverlayButton}"
+                            Margin="10,0,0,0" Click="OnCancel"/>
+                    <TextBlock x:Name="HintText"
+                               Text="拖动选择截图区域；松开后可调整区域或直接标注"
+                               Foreground="#CFEAFF" FontSize="11" VerticalAlignment="Center"/>
+                </DockPanel>
+                <WrapPanel x:Name="EditTools" Width="1100" Visibility="Collapsed" Margin="0,4,0,0">
+                    <TextBlock Text="标注" Foreground="#8FB4D8" FontSize="10" VerticalAlignment="Center" Margin="0,0,6,5"/>
+                    <Button x:Name="SelectToolButton" Content="选择" Tag="select" Style="{StaticResource OverlayButton}" Click="OnToolClick"/>
+                    <Button x:Name="RectToolButton" Content="方框" Tag="rect" Style="{StaticResource OverlayButton}" Click="OnToolClick"/>
+                    <Button x:Name="EllipseToolButton" Content="圆" Tag="ellipse" Style="{StaticResource OverlayButton}" Click="OnToolClick"/>
+                    <Button x:Name="LineToolButton" Content="直线" Tag="line" Style="{StaticResource OverlayButton}" Click="OnToolClick"/>
+                    <Button x:Name="ArrowToolButton" Content="箭头" Tag="arrow" Style="{StaticResource OverlayButton}" Click="OnToolClick"/>
+                    <Button x:Name="TextToolButton" Content="文字" Tag="text" Style="{StaticResource OverlayButton}" Click="OnToolClick"/>
+                    <Border Width="1" Background="#2A5A80" Margin="4,1,8,6"/>
+                    <TextBlock Text="箭头大小" Foreground="#8FB4D8" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,5"/>
+                    <Button x:Name="ArrowSmallButton" Content="小" Tag="arrow-s" Style="{StaticResource OverlayButton}" Click="OnArrowSizeClick"/>
+                    <Button x:Name="ArrowMediumButton" Content="中" Tag="arrow-m" Style="{StaticResource OverlayButton}" Click="OnArrowSizeClick"/>
+                    <Button x:Name="ArrowLargeButton" Content="大" Tag="arrow-l" Style="{StaticResource OverlayButton}" Click="OnArrowSizeClick"/>
+                    <Border Width="1" Background="#2A5A80" Margin="4,1,8,6"/>
+                    <TextBlock Text="字号" Foreground="#8FB4D8" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,5"/>
+                    <TextBox x:Name="FontSizeBox" Width="34" Text="20" MaxLength="2" Margin="0,0,7,5"/>
+                    <TextBlock Text="线宽" Foreground="#8FB4D8" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,5"/>
+                    <TextBox x:Name="ThicknessBox" Width="30" Text="3" MaxLength="2" Margin="0,0,7,5"/>
+                    <Button x:Name="ColorButton" Content="颜色" Style="{StaticResource OverlayButton}" Click="OnPickColor"/>
+                    <Button Content="撤销" Style="{StaticResource OverlayButton}" Click="OnUndo"/>
+                    <Button Content="清空" Style="{StaticResource OverlayButton}" Click="OnClear"/>
+                    <Button Content="重选" Style="{StaticResource OverlayButton}" Click="OnReselect"/>
+                    <Border Width="1" Background="#2A5A80" Margin="4,1,8,6"/>
+                    <Button x:Name="CopyButton" Content="复制" Style="{StaticResource OverlayButton}" Click="OnCopy"
+                            Background="#4D6BFE" BorderBrush="#4D6BFE" Foreground="#FFFFFF"/>
+                    <Button Content="保存" Style="{StaticResource OverlayButton}" Click="OnSave"/>
+                </WrapPanel>
             </StackPanel>
         </Border>
     </Grid>

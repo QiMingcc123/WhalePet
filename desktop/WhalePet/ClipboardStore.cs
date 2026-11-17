@@ -19,6 +19,11 @@ public static class ClipboardStore
     public const int MaxEntries = 50;
     private const string FileName = "clipboard.json";
 
+    /// <summary>Raised after the history has been changed by the app or a clipboard update.</summary>
+    public static event EventHandler? Changed;
+
+    public static void NotifyChanged() => Changed?.Invoke(null, EventArgs.Empty);
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,

@@ -129,9 +129,8 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <StackPanel Grid.Column="0" Margin="0,0,0,0">
                 <TextBlock Text="基础" Style="{StaticResource Section}"/>
                 <CheckBox x:Name="ShowStatusCheck" Content="显示数据状态栏"/>
                 <CheckBox x:Name="GreetingCheck" Content="启动时根据本地时间打招呼"/>
@@ -195,32 +194,24 @@
                     </StackPanel>
                 </Grid>
 
+                <CheckBox x:Name="ShowDeviceInfoCheck" Content="在展开状态栏中显示设备信息"/>
+                <CheckBox x:Name="ShowRemovableDevicesCheck" Content="在状态栏显示已连接的移动设备"/>
+                <CheckBox x:Name="AutoHideCheck" Content="拖到屏幕边缘时自动收起"/>
+                <Grid Margin="0,5,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="自动收起边缘距离（0–50px）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="EdgeDistanceBox"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="设备与贴边" Style="{StaticResource Section}"/>
-                        <CheckBox x:Name="ShowDeviceInfoCheck" Content="在展开状态栏中显示设备信息"/>
-                        <CheckBox x:Name="ShowRemovableDevicesCheck" Content="在状态栏显示已连接的移动设备"/>
-                        <CheckBox x:Name="ShowWaterReminderCheck" Content="启用喝水提醒"/>
-                        <CheckBox x:Name="AutoHideCheck" Content="拖到屏幕边缘时自动收起"/>
-                        <Grid Margin="0,58,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Margin="0,0,6,0">
-                                <TextBlock Text="自动收起边缘距离（0–50px）" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="EdgeDistanceBox"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="0,0,6,0">
-                                <TextBlock Text="悬停展开保持（秒）" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="EdgeHoverSecondsBox"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="喝水提醒间隔（分钟）" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="WaterMinutesBox"/>
-                            </StackPanel>
-                        </Grid>
+                        <TextBlock Text="悬停展开保持（秒）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="EdgeHoverSecondsBox"/>
+                    </StackPanel>
+                </Grid>
+
                     </StackPanel>
                 </Grid>
 
@@ -448,7 +439,23 @@
                 <TextBox x:Name="WorkEndReminderBox"/>
 
                 <TextBlock Text="提醒与工具" Style="{StaticResource Section}"/>
+                <CheckBox x:Name="ShowWaterReminderCheck" Content="启用喝水提醒（通过角色气泡提示）"/>
+                <CheckBox x:Name="WaterPopupCheck" Content="喝水提醒同时弹窗提示"/>
+                <Grid Margin="0,2,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="喝水提醒间隔（分钟）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WaterMinutesBox"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="5–240 分钟"
+                               Foreground="#6F8CA6" FontSize="9" VerticalAlignment="Bottom"
+                               Margin="0,0,0,7"/>
+                </Grid>
                 <CheckBox x:Name="SedentaryCheck" Content="启用久坐提醒（通过角色气泡提示）"/>
+                <CheckBox x:Name="SedentaryPopupCheck" Content="久坐提醒同时弹窗提示"/>
                 <Grid Margin="0,2,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>

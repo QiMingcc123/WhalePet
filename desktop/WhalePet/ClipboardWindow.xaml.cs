@@ -7,6 +7,7 @@ namespace WhalePet;
 public partial class ClipboardWindow : Window
 {
     private readonly ObservableCollection<ClipboardEntry> _entries;
+    private bool _suppressReload;
 
     public ClipboardWindow()
     {
@@ -23,7 +24,46 @@ public partial class ClipboardWindow : Window
         Resources["AccentBorder"] = ThemePalette.Brush(ThemePalette.Lighten(accent, 0.25), 0.85);
         _entries = new ObservableCollection<ClipboardEntry>(ClipboardStore.Load());
         EntryList.ItemsSource = _entries;
+        ClipboardStore.Changed += OnClipboardStoreChanged;
+        Closed += (_, _) => ClipboardStore.Changed -= OnClipboardStoreChanged;
         UpdateStatus();
+    }
+
+    private void OnClipboardStoreChanged(object? sender, EventArgs e)
+    {
+        if (_suppressReload) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!IsLoaded || _suppressReload) return;
+            ReloadEntries();
+        }));
+    }
+
+    private void ReloadEntries()
+    {
+        var latest = ClipboardStore.Load();
+        if (latest.Count == _entries.Count
+            && latest.Select(entry => entry.Id).SequenceEqual(_entries.Select(entry => entry.Id)))
+        {
+            return;
+        }
+        _entries.Clear();
+        foreach (var entry in latest) _entries.Add(entry);
+        UpdateStatus();
+    }
+
+    private void SaveLocal()
+    {
+        _suppressReload = true;
+        try
+        {
+            ClipboardStore.Save(_entries);
+            ClipboardStore.NotifyChanged();
+        }
+        finally
+        {
+            _suppressReload = false;
+        }
     }
 
     private void UpdateStatus()
@@ -50,7 +90,7 @@ public partial class ClipboardWindow : Window
     {
         if (sender is not FrameworkElement { Tag: ClipboardEntry entry }) return;
         _entries.Remove(entry);
-        ClipboardStore.Save(_entries);
+        SaveLocal();
         UpdateStatus();
     }
 
@@ -62,7 +102,7 @@ public partial class ClipboardWindow : Window
             return;
         }
         _entries.Clear();
-        ClipboardStore.Save(_entries);
+        SaveLocal();
         UpdateStatus();
     }
 

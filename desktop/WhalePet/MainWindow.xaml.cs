@@ -64,12 +64,11 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, DateTime> _alarmFiredDates = new();
     private readonly List<ClipboardEntry> _clipboardEntries = new();
     private string? _lastClipboardText;
-    private bool _clipboardPrimed;
-    private bool _clipboardPaused;
     private bool _removableBusy;
     private readonly List<DriveInfo> _removableDrives = new();
     private WorkBadgeWindow? _workBadgeWindow;
     private AlarmPopupWindow? _alarmPopupWindow;
+    private AlarmPopupWindow? _reminderPopupWindow;
     private HwndSource? _hwndSource;
     private IntPtr _hwnd;
     private bool _screenshotHotkeyRegistered;
@@ -100,6 +99,15 @@ public partial class MainWindow : Window
         _nextWaterReminder = DateTime.Now.AddMinutes(_settings.WaterReminderMinutes);
         _nextSedentary = DateTime.Now.AddMinutes(_settings.SedentaryMinutes > 0 ? _settings.SedentaryMinutes : 45);
         _clipboardEntries.AddRange(ClipboardStore.Load());
+        ClipboardStore.Changed += OnClipboardStoreChanged;
+        try
+        {
+            _lastClipboardText = Clipboard.ContainsText() ? Clipboard.GetText()?.Trim() : null;
+        }
+        catch
+        {
+            _lastClipboardText = null;
+        }
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += OnTick;
         _timer.Start();
@@ -155,6 +163,7 @@ public partial class MainWindow : Window
         _hwnd = new WindowInteropHelper(this).Handle;
         _hwndSource = HwndSource.FromHwnd(_hwnd);
         _hwndSource?.AddHook(WndProc);
+        Native.ListenForClipboard(_hwnd);
         RegisterScreenshotHotkey();
     }
 
@@ -191,6 +200,11 @@ public partial class MainWindow : Window
         {
             handled = true;
             StartScreenshot();
+        }
+        else if (msg == 0x031D) // WM_CLIPBOARDUPDATE
+        {
+            handled = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(PollClipboard));
         }
         return IntPtr.Zero;
     }
@@ -335,6 +349,10 @@ public partial class MainWindow : Window
         {
             _nextWaterReminder = now.AddMinutes(_settings.WaterReminderMinutes);
             ShowSpeech("该喝水啦，起来活动一下~");
+            if (_settings.WaterPopupEnabled)
+            {
+                ShowReminderPopup("喝水提醒", "💧", "该喝水啦，起来活动一下~");
+            }
         }
         UpdateSedentaryReminder(idle, now);
         UpdateAlarms(now);
@@ -373,6 +391,22 @@ public partial class MainWindow : Window
 
         _nextSedentary = now.AddMinutes(minutes);
         ShowSpeech($"已经坐了 {minutes} 分钟啦，起来活动一下肩颈吧～");
+        if (_settings.SedentaryPopupEnabled)
+        {
+            ShowReminderPopup("久坐提醒", "🧘", $"已经坐了 {minutes} 分钟啦，起来活动一下肩颈吧～");
+        }
+    }
+
+    private void ShowReminderPopup(string title, string icon, string message)
+    {
+        _reminderPopupWindow?.Close();
+        var popup = new AlarmPopupWindow(message, DateTime.Now.ToString("HH:mm"), _settings.ThemeColor, title, icon);
+        _reminderPopupWindow = popup;
+        popup.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_reminderPopupWindow, popup)) _reminderPopupWindow = null;
+        };
+        popup.Show();
     }
 
     private void UpdateAlarms(DateTime now)
@@ -1238,7 +1272,7 @@ public partial class MainWindow : Window
 
     private void PollClipboard()
     {
-        if (_closing || _clipboardPaused || !_settings.ClipboardHistoryEnabled) return;
+        if (_closing || !_settings.ClipboardHistoryEnabled) return;
 
         string text;
         try
@@ -1253,12 +1287,6 @@ public partial class MainWindow : Window
 
         text = text.Trim();
         if (text.Length == 0) return;
-        if (!_clipboardPrimed)
-        {
-            _clipboardPrimed = true;
-            _lastClipboardText = text;
-            return;
-        }
         if (string.Equals(text, _lastClipboardText, StringComparison.Ordinal)) return;
 
         _lastClipboardText = text;
@@ -1271,20 +1299,26 @@ public partial class MainWindow : Window
             _clipboardEntries.RemoveAt(_clipboardEntries.Count - 1);
         }
         ClipboardStore.Save(_clipboardEntries);
+        ClipboardStore.NotifyChanged();
+    }
+
+    private void OnClipboardStoreChanged(object? sender, EventArgs e)
+    {
+        if (_closing) return;
+        _clipboardEntries.Clear();
+        _clipboardEntries.AddRange(ClipboardStore.Load());
         ClipboardHistoryButton.ToolTip = $"剪贴板历史（{_clipboardEntries.Count} 条）";
     }
 
     private void OnClipboardHistoryClick(object sender, RoutedEventArgs e)
     {
         _suppressEdgeCollapse = true;
-        _clipboardPaused = true;
         try
         {
             new ClipboardWindow { Owner = this }.ShowDialog();
         }
         finally
         {
-            _clipboardPaused = false;
             _suppressEdgeCollapse = false;
         }
 
@@ -1609,7 +1643,11 @@ public partial class MainWindow : Window
         _workBadgeWindow = null;
         _alarmPopupWindow?.Close();
         _alarmPopupWindow = null;
+        _reminderPopupWindow?.Close();
+        _reminderPopupWindow = null;
         _inputHook?.Dispose();
+        ClipboardStore.Changed -= OnClipboardStoreChanged;
+        Native.StopListeningForClipboard(_hwnd);
         HotkeyManager.Unregister(_hwnd, ScreenshotHotkeyId);
         _hwndSource?.RemoveHook(WndProc);
         _weatherCts?.Cancel();

@@ -5,11 +5,15 @@ namespace WhalePet;
 
 public partial class AlarmPopupWindow : Window
 {
-    public AlarmPopupWindow(string message, string time, string themeColor)
+    public AlarmPopupWindow(string message, string time, string themeColor,
+        string title = "闹钟提醒", string icon = "⏰")
     {
         InitializeComponent();
         MessageText.Text = message;
         TimeText.Text = time;
+        TitleText.Text = title;
+        IconText.Text = icon;
+        Title = title;
 
         var accent = ThemePalette.Parse(themeColor, Color.FromRgb(0x4D, 0x6B, 0xFE));
         Card.BorderBrush = ThemePalette.Brush(accent);

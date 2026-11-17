@@ -28,11 +28,13 @@ public partial class SettingsWindow : Window
         ShowDeviceInfoCheck.IsChecked = settings.ShowDeviceInfo;
         ShowRemovableDevicesCheck.IsChecked = settings.ShowRemovableDevices;
         ShowWaterReminderCheck.IsChecked = settings.ShowWaterReminder;
+        WaterPopupCheck.IsChecked = settings.WaterPopupEnabled;
         AutoHideCheck.IsChecked = settings.AutoHideAtEdge;
         EdgeDistanceBox.Text = settings.EdgeCollapseDistance.ToString(CultureInfo.InvariantCulture);
         EdgeHoverSecondsBox.Text = settings.EdgeHoverSeconds.ToString(CultureInfo.InvariantCulture);
         WaterMinutesBox.Text = settings.WaterReminderMinutes.ToString(CultureInfo.InvariantCulture);
         SedentaryCheck.IsChecked = settings.SedentaryReminderEnabled;
+        SedentaryPopupCheck.IsChecked = settings.SedentaryPopupEnabled;
         SedentaryMinutesBox.Text = settings.SedentaryMinutes.ToString(CultureInfo.InvariantCulture);
         AlarmsCheck.IsChecked = settings.AlarmsEnabled;
         _alarms = settings.Alarms.Select(alarm => alarm.Clone()).ToList();
@@ -485,11 +487,13 @@ public partial class SettingsWindow : Window
         Settings.ShowDeviceInfo = ShowDeviceInfoCheck.IsChecked == true;
         Settings.ShowRemovableDevices = ShowRemovableDevicesCheck.IsChecked == true;
         Settings.ShowWaterReminder = ShowWaterReminderCheck.IsChecked == true;
+        Settings.WaterPopupEnabled = WaterPopupCheck.IsChecked == true;
         Settings.AutoHideAtEdge = AutoHideCheck.IsChecked == true;
         Settings.EdgeCollapseDistance = edgeDistance;
         Settings.EdgeHoverSeconds = edgeHoverSeconds;
         Settings.WaterReminderMinutes = waterMinutes;
         Settings.SedentaryReminderEnabled = SedentaryCheck.IsChecked == true;
+        Settings.SedentaryPopupEnabled = SedentaryPopupCheck.IsChecked == true;
         Settings.SedentaryMinutes = sedentaryMinutes;
         Settings.AlarmsEnabled = AlarmsCheck.IsChecked == true;
         Settings.Alarms = _alarms.Select(alarm => alarm.Clone()).ToList();

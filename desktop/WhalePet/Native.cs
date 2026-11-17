@@ -27,7 +27,17 @@ internal static class Native
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool LockWorkStation();
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool AddClipboardFormatListener(IntPtr hwnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+
     public static bool LockScreen() => LockWorkStation();
+
+    public static bool ListenForClipboard(IntPtr hwnd) => AddClipboardFormatListener(hwnd);
+
+    public static bool StopListeningForClipboard(IntPtr hwnd) => RemoveClipboardFormatListener(hwnd);
 
     public static TimeSpan GetIdleTime()
     {
