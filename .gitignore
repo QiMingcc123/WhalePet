@@ -5,6 +5,7 @@ dist/publish-tmp/
 *.user
 .vs/
 docs
+verification
 
 # OS files
 Thumbs.db
