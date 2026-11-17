@@ -1,6 +1,6 @@
 # 蓝色鲸鱼娘桌宠 · DSH Web 插件 + Windows 桌面版
 
-![](D:\weixinrong\deepseek-harness-project\img\MainInterface.png)
+![运行效果截图](./img/MainInterface.png)
 
 一套角色形象、两套运行方式：
 
@@ -82,7 +82,7 @@ dist\WhalePet.exe
 
 这是真正的单文件 self-contained exe，不需要安装 .NET 运行时，也不需要旁边的 `Assets` 文件夹。首次启动会把内嵌的默认角色图解压到 `%LOCALAPPDATA%\DSHWhalePet\assets`。
 
-![image-20261117143932909](D:\weixinrong\deepseek-harness-project\img\MainInterface2.png)
+![运行效果截图2](./img/MainInterface2.png)
 
 ### 功能
 
@@ -183,8 +183,6 @@ dist\WhalePet.exe
 - 图片切换使用 WPF 淡入淡出动画。
 
 - 启动时先显示作者信息动画（文字为 “Create by QiMingcc”），动画结束后再显示桌宠主界面；作者卡片使用当前主题色。
-
-  
 
 ### 配置位置
 
