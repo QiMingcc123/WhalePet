@@ -4,6 +4,7 @@ desktop/WhalePet/obj/
 dist/publish-tmp/
 *.user
 .vs/
+docs
 
 # OS files
 Thumbs.db
