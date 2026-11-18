@@ -64,6 +64,7 @@ public partial class SettingsWindow : Window
         WorkBadgeScaleBox.Text = settings.WorkBadgeScale.ToString(CultureInfo.InvariantCulture);
         WorkBadgeFontSizeBox.Text = settings.WorkBadgeFontSize.ToString(CultureInfo.InvariantCulture);
         ShowBeforeWorkReminderCheck.IsChecked = settings.ShowBeforeWorkReminder;
+        BeforeWorkMinutesBox.Text = settings.BeforeWorkReminderMinutes.ToString(CultureInfo.InvariantCulture);
         ShowEndWorkReminderCheck.IsChecked = settings.ShowEndWorkReminder;
         WorkBeforeReminderBox.Text = settings.WorkReminderBeforeText;
         WorkEndReminderBox.Text = settings.WorkReminderEndText;
@@ -427,6 +428,12 @@ public partial class SettingsWindow : Window
             ShowNotice("搬砖提示框大小必须在 0.5–2，文字大小必须在 8–32 px。");
             return;
         }
+        if (!int.TryParse(BeforeWorkMinutesBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var beforeWorkMinutes)
+            || beforeWorkMinutes < 1 || beforeWorkMinutes > 120)
+        {
+            ShowNotice("下班前提醒时间必须在 1–120 分钟之间。");
+            return;
+        }
         if (!int.TryParse(ChatIdleMinutesBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var chatIdleMinutes)
             || chatIdleMinutes < 0 || chatIdleMinutes > 240)
         {
@@ -516,6 +523,7 @@ public partial class SettingsWindow : Window
         Settings.WorkBadgeScale = workBadgeScale;
         Settings.WorkBadgeFontSize = workBadgeFontSize;
         Settings.ShowBeforeWorkReminder = ShowBeforeWorkReminderCheck.IsChecked == true;
+        Settings.BeforeWorkReminderMinutes = beforeWorkMinutes;
         Settings.ShowEndWorkReminder = ShowEndWorkReminderCheck.IsChecked == true;
         Settings.WorkReminderBeforeText = WorkBeforeReminderBox.Text.Trim();
         Settings.WorkReminderEndText = WorkEndReminderBox.Text.Trim();

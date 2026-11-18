@@ -70,6 +70,7 @@ public sealed class PetSettings
     public double WorkBadgeScale { get; set; } = 1.0;
     public double WorkBadgeFontSize { get; set; } = 10;
     public bool ShowBeforeWorkReminder { get; set; } = true;
+    public int BeforeWorkReminderMinutes { get; set; } = 5;
     public bool ShowEndWorkReminder { get; set; } = true;
     public string WorkReminderBeforeText { get; set; } = "快下班了，去倒个水吧~";
     public string WorkReminderEndText { get; set; } = "下班了，下班了，关机，打卡，50到手！";
@@ -181,6 +182,7 @@ public sealed class PetSettings
             WorkBadgeScale = WorkBadgeScale,
             WorkBadgeFontSize = WorkBadgeFontSize,
             ShowBeforeWorkReminder = ShowBeforeWorkReminder,
+            BeforeWorkReminderMinutes = BeforeWorkReminderMinutes,
             ShowEndWorkReminder = ShowEndWorkReminder,
             WorkReminderBeforeText = WorkReminderBeforeText,
             WorkReminderEndText = WorkReminderEndText,
@@ -242,6 +244,7 @@ public sealed class PetSettings
         WorkEnd = NormalizeTime(WorkEnd, "18:00");
         WorkBadgeText = NormalizeText(WorkBadgeText, "搬砖中...", 40);
         WorkReminderBeforeText = NormalizeText(WorkReminderBeforeText, "快下班了，去倒个水吧~", 100);
+        BeforeWorkReminderMinutes = Math.Clamp(BeforeWorkReminderMinutes, 1, 120);
         WorkReminderEndText = NormalizeText(WorkReminderEndText, "下班了，下班了，关机，打卡，50到手！", 140);
 
         var defaults = CreateDefault();

@@ -72,6 +72,7 @@ public partial class MainWindow : Window
     private HwndSource? _hwndSource;
     private IntPtr _hwnd;
     private bool _screenshotHotkeyRegistered;
+    private ScreenshotOverlayWindow? _screenshotOverlay;
     private const int ScreenshotHotkeyId = 0x5151;
     private bool _deviceInfoBusy;
     private EdgeSide _edgeSide = EdgeSide.None;
@@ -212,14 +213,26 @@ public partial class MainWindow : Window
     private void StartScreenshot()
     {
         if (_closing || !_settings.ScreenshotEnabled) return;
+        if (_screenshotOverlay is not null)
+        {
+            if (_screenshotOverlay.IsVisible) _screenshotOverlay.Activate();
+            return;
+        }
+
         try
         {
             var overlay = ScreenshotOverlayWindow.Create();
+            _screenshotOverlay = overlay;
+            overlay.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_screenshotOverlay, overlay)) _screenshotOverlay = null;
+            };
             overlay.Show();
             overlay.Activate();
         }
         catch (Exception error)
         {
+            _screenshotOverlay = null;
             ShowSpeech("截图失败：" + error.Message);
         }
     }
@@ -519,7 +532,7 @@ public partial class MainWindow : Window
         }
 
         if (_settings.ShowBeforeWorkReminder && !_beforeWorkReminderShown
-            && now.TimeOfDay >= end - TimeSpan.FromMinutes(5) && now.TimeOfDay < end)
+            && now.TimeOfDay >= end - TimeSpan.FromMinutes(_settings.BeforeWorkReminderMinutes) && now.TimeOfDay < end)
         {
             _beforeWorkReminderShown = true;
             ShowSpeech(_settings.WorkReminderBeforeText);
@@ -1533,6 +1546,8 @@ public partial class MainWindow : Window
     private void ApplyScale()
     {
         var previousBottom = _loaded && !double.IsNaN(Top) ? Top + ActualHeight : double.NaN;
+        var previousRight = _loaded && !double.IsNaN(Left) ? Left + Width : double.NaN;
+        var workArea = SystemParameters.WorkArea;
         RootScale.ScaleX = _settings.Scale;
         RootScale.ScaleY = _settings.Scale;
         CharacterLayoutScale.ScaleX = _settings.CharacterScale;
@@ -1542,7 +1557,8 @@ public partial class MainWindow : Window
         SummaryButton.Width = statusWidth;
         SummaryButton.MinHeight = Math.Max(38 * _settings.StatusBarScale, _settings.StatusFontSize + 18);
         DetailsPanel.Width = statusWidth;
-        var contentWidth = Math.Max(430 * _settings.CharacterScale, Math.Max(430, statusWidth));
+        var contentWidth = Math.Max(430 * _settings.CharacterScale,
+            _settings.ShowStatusBar ? statusWidth : 0);
         Width = contentWidth * _settings.Scale;
         UpdateLayout();
         PositionStatusActions();
@@ -1554,6 +1570,14 @@ public partial class MainWindow : Window
             Left = ClampLeft(Left);
             _adjustingPosition = false;
             _anchorBottom = Top + ActualHeight;
+        }
+
+        if (!_collapsedAtEdge && !double.IsNaN(previousRight)
+            && previousRight >= workArea.Right - Math.Max(2, _settings.EdgeCollapseDistance))
+        {
+            _adjustingPosition = true;
+            Left = Math.Max(workArea.Left, workArea.Right - Width);
+            _adjustingPosition = false;
         }
     }
 

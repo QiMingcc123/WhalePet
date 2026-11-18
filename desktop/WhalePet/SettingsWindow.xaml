@@ -431,9 +431,21 @@
                         <TextBox x:Name="WorkBadgeFontSizeBox"/>
                     </StackPanel>
                 </Grid>
-                <CheckBox x:Name="ShowBeforeWorkReminderCheck" Content="显示下班前 5 分钟提示"/>
-                <TextBlock Text="下班前 5 分钟提示" Style="{StaticResource FieldLabel}"/>
-                <TextBox x:Name="WorkBeforeReminderBox"/>
+                <CheckBox x:Name="ShowBeforeWorkReminderCheck" Content="显示下班前提示"/>
+                <Grid Margin="0,2,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="提前提醒（分钟）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="BeforeWorkMinutesBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="下班前提示内容" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="WorkBeforeReminderBox"/>
+                    </StackPanel>
+                </Grid>
                 <CheckBox x:Name="ShowEndWorkReminderCheck" Content="显示下班时间提示"/>
                 <TextBlock Text="下班时间提示" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="WorkEndReminderBox"/>
