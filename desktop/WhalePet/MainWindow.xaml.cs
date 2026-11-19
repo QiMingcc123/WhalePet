@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private int _fadeToken;
     private int _bubbleToken;
     private DateTime _lastWeatherFetch = DateTime.MinValue;
+    private int _weatherRequestId;
     private WeatherInfo? _weatherInfo;
     private CancellationTokenSource? _weatherCts;
     private bool _detailsOpen;
@@ -813,7 +814,12 @@ public partial class MainWindow : Window
             : state == PetState.Play
                 ? _settings.PlayImages
                 : _settings.MainImages;
-        var selected = PickImage(list);
+        var disabled = state == PetState.Idle
+            ? _settings.DisabledIdleImages
+            : state == PetState.Play
+                ? _settings.DisabledPlayImages
+                : _settings.DisabledMainImages;
+        var selected = PickImage(list, disabled, state);
         if (selected.Length > 0) ShowImage(selected);
         StatusDot.Fill = state == PetState.Idle
             ? new SolidColorBrush(Color.FromRgb(124, 147, 170))
@@ -821,18 +827,19 @@ public partial class MainWindow : Window
         UpdateStatusText();
     }
 
-    private string PickImage(List<string> images)
+    private string PickImage(List<string> images, IReadOnlyCollection<string> disabled, PetState state)
     {
         var available = images
+            .Where(path => !disabled.Contains(path, StringComparer.OrdinalIgnoreCase))
             .Select(_settings.ResolveImagePath)
             .Where(File.Exists)
             .ToList();
         if (available.Count == 0)
         {
             var defaults = PetSettings.CreateDefault();
-            var fallback = ReferenceEquals(images, _settings.IdleImages)
+            var fallback = state == PetState.Idle
                 ? defaults.IdleImages
-                : ReferenceEquals(images, _settings.PlayImages)
+                : state == PetState.Play
                     ? defaults.PlayImages
                     : defaults.MainImages;
             available = fallback
@@ -1146,43 +1153,58 @@ public partial class MainWindow : Window
         if (!_settings.WeatherEnabled)
         {
             WeatherPill.Visibility = Visibility.Collapsed;
+            return;
         }
 
+        var requestId = ++_weatherRequestId;
         _lastWeatherFetch = DateTime.Now;
         _weatherCts?.Cancel();
         _weatherCts?.Dispose();
         _weatherCts = new CancellationTokenSource();
         var token = _weatherCts.Token;
+        var city = _settings.WeatherCity;
         if (_weatherInfo is null)
         {
-            WeatherPill.Visibility = _settings.WeatherEnabled ? Visibility.Visible : Visibility.Collapsed;
+            WeatherPill.Visibility = Visibility.Visible;
             WeatherText.Text = "正在获取天气…";
         }
 
         try
         {
             var info = await _weatherService.GetAsync(_settings, token);
-            if (token.IsCancellationRequested) return;
+            if (token.IsCancellationRequested || requestId != _weatherRequestId) return;
+
+            // The first request after entering a city can run while the network or
+            // the old request is still settling. Retry once instead of showing a
+            // false failure until the next application start.
+            if (info is null && !string.IsNullOrWhiteSpace(city))
+            {
+                await Task.Delay(700, token);
+                if (token.IsCancellationRequested || requestId != _weatherRequestId) return;
+                info = await _weatherService.GetAsync(_settings, token);
+                if (token.IsCancellationRequested || requestId != _weatherRequestId) return;
+            }
+
             if (info is null)
             {
                 _weatherInfo = null;
-                WeatherPill.Visibility = _settings.WeatherEnabled ? Visibility.Visible : Visibility.Collapsed;
+                WeatherPill.Visibility = Visibility.Visible;
                 WeatherText.Text = "天气获取失败";
                 WeatherDetailText.Text = "天气不可用：当前离线或网络受限。";
                 return;
             }
 
             _weatherInfo = info;
-            WeatherPill.Visibility = _settings.WeatherEnabled ? Visibility.Visible : Visibility.Collapsed;
+            WeatherPill.Visibility = Visibility.Visible;
             WeatherText.Text = info.Summary;
             WeatherDetailText.Text = info.Detail;
             UpdateStatusText();
         }
         catch
         {
-            if (!token.IsCancellationRequested)
+            if (!token.IsCancellationRequested && requestId == _weatherRequestId)
             {
-                WeatherPill.Visibility = _settings.WeatherEnabled ? Visibility.Visible : Visibility.Collapsed;
+                WeatherPill.Visibility = Visibility.Visible;
                 WeatherText.Text = "天气获取失败";
                 WeatherDetailText.Text = "天气不可用：当前离线或网络受限。";
             }
@@ -1259,7 +1281,16 @@ public partial class MainWindow : Window
         _alarmFiredDates.Clear();
         ShowSpeech("设置已保存。");
         UpdateStatusText();
-        _ = RefreshWeatherAsync();
+        _ = RefreshWeatherAfterSettingsAsync();
+    }
+
+    private async Task RefreshWeatherAfterSettingsAsync()
+    {
+        // Let the modal settings window finish closing and the old request settle
+        // before asking for the new city.
+        await Task.Delay(250);
+        if (_closing) return;
+        await RefreshWeatherAsync();
     }
 
     private void OnMemoClick(object sender, RoutedEventArgs e)

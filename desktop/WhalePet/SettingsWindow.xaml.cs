@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
 
@@ -11,6 +12,9 @@ public partial class SettingsWindow : Window
     public PetSettings Settings { get; private set; }
     private bool _initialScrollLock = true;
     private List<AlarmItem> _alarms = new();
+    private readonly List<ImageRow> _mainRows = new();
+    private readonly List<ImageRow> _idleRows = new();
+    private readonly List<ImageRow> _playRows = new();
 
     public SettingsWindow(PetSettings settings)
     {
@@ -86,9 +90,9 @@ public partial class SettingsWindow : Window
         SpeechBubbleFontSizeBox.Text = settings.SpeechBubbleFontSize.ToString(CultureInfo.InvariantCulture);
         InputBadgeScaleBox.Text = settings.InputBadgeScale.ToString(CultureInfo.InvariantCulture);
         ChatIdleMinutesBox.Text = settings.ChatIdleMinutes.ToString(CultureInfo.InvariantCulture);
-        MainImagesBox.Text = string.Join(Environment.NewLine, settings.MainImages);
-        IdleImagesBox.Text = string.Join(Environment.NewLine, settings.IdleImages);
-        PlayImagesBox.Text = string.Join(Environment.NewLine, settings.PlayImages);
+        PopulateImageRows(MainImageRows, _mainRows, settings.MainImages, settings.DisabledMainImages);
+        PopulateImageRows(IdleImageRows, _idleRows, settings.IdleImages, settings.DisabledIdleImages);
+        PopulateImageRows(PlayImageRows, _playRows, settings.PlayImages, settings.DisabledPlayImages);
         PhrasesBox.Text = string.Join(Environment.NewLine, settings.InteractionPhrases);
         ChatPhrasesBox.Text = string.Join(Environment.NewLine, settings.ChatPhrases);
         ConfigHint.Text = "配置保存位置：" + SettingsStore.ConfigPath;
@@ -269,13 +273,99 @@ public partial class SettingsWindow : Window
         WeatherCityBox.IsEnabled = true;
     }
 
-    private void OnBrowseMain(object sender, RoutedEventArgs e) => BrowseInto(MainImagesBox);
+    private void OnAddMainImage(object sender, RoutedEventArgs e) => AddImageFromDialog(MainImageRows, _mainRows);
 
-    private void OnBrowseIdle(object sender, RoutedEventArgs e) => BrowseInto(IdleImagesBox);
+    private void OnAddIdleImage(object sender, RoutedEventArgs e) => AddImageFromDialog(IdleImageRows, _idleRows);
 
-    private void OnBrowsePlay(object sender, RoutedEventArgs e) => BrowseInto(PlayImagesBox);
+    private void OnAddPlayImage(object sender, RoutedEventArgs e) => AddImageFromDialog(PlayImageRows, _playRows);
 
-    private static void BrowseInto(System.Windows.Controls.TextBox box)
+    private void PopulateImageRows(StackPanel panel, List<ImageRow> rows,
+        IEnumerable<string> images, IEnumerable<string> disabled)
+    {
+        panel.Children.Clear();
+        rows.Clear();
+        var disabledSet = new HashSet<string>(disabled ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        foreach (var path in images ?? Enumerable.Empty<string>())
+        {
+            var text = (path ?? "").Trim();
+            if (text.Length == 0) continue;
+            AddImageRow(panel, rows, text, !disabledSet.Contains(text));
+        }
+    }
+
+    private void AddImageRow(StackPanel panel, List<ImageRow> rows, string path, bool enabled)
+    {
+        if (rows.Count >= 24) return;
+
+        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var checkBox = new CheckBox
+        {
+            IsChecked = enabled,
+            ToolTip = "启用该图片",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        System.Windows.Automation.AutomationProperties.SetName(checkBox, "启用图片 " + path);
+        checkBox.ToolTip = "启用该图片\n" + path;
+        var pathBox = new TextBox
+        {
+            Text = path,
+            Height = 28,
+            FontSize = 10,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        pathBox.TextChanged += (_, _) =>
+        {
+            var current = pathBox.Text.Trim();
+            System.Windows.Automation.AutomationProperties.SetName(
+                checkBox,
+                current.Length == 0 ? "启用图片" : "启用图片 " + current);
+            checkBox.ToolTip = current.Length == 0 ? "启用该图片" : "启用该图片\n" + current;
+        };
+        var browse = new Button
+        {
+            Content = "浏览…",
+            Style = (Style)FindResource("Action"),
+            Margin = new Thickness(0, 0, 4, 0),
+            Padding = new Thickness(8, 3, 8, 3),
+            FontSize = 10,
+        };
+        var remove = new Button
+        {
+            Content = "×",
+            Style = (Style)FindResource("Action"),
+            Padding = new Thickness(9, 3, 9, 3),
+            FontSize = 10,
+            ToolTip = "删除这张图片",
+        };
+
+        var row = new ImageRow(grid, checkBox, pathBox);
+        Grid.SetColumn(pathBox, 1);
+        Grid.SetColumn(browse, 2);
+        Grid.SetColumn(remove, 3);
+        grid.Children.Add(checkBox);
+        grid.Children.Add(pathBox);
+        grid.Children.Add(browse);
+        grid.Children.Add(remove);
+
+        browse.Click += (_, _) => BrowseImageRow(rows, row);
+        remove.Click += (_, _) =>
+        {
+            rows.Remove(row);
+            panel.Children.Remove(grid);
+        };
+
+        rows.Add(row);
+        panel.Children.Add(grid);
+    }
+
+    private void AddImageFromDialog(StackPanel panel, List<ImageRow> rows)
     {
         var dialog = new OpenFileDialog
         {
@@ -284,10 +374,43 @@ public partial class SettingsWindow : Window
             Multiselect = false,
         };
         if (dialog.ShowDialog() != true) return;
-        var current = box.Text.TrimEnd();
-        box.Text = current.Length == 0 ? dialog.FileName : current + Environment.NewLine + dialog.FileName;
-        box.CaretIndex = box.Text.Length;
-        box.ScrollToEnd();
+        AddImageRow(panel, rows, dialog.FileName, true);
+    }
+
+    private void BrowseImageRow(List<ImageRow> rows, ImageRow row)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择角色图片",
+            Filter = "图片文件|*.png;*.webp;*.jpg;*.jpeg;*.gif;*.bmp|所有文件|*.*",
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog() != true) return;
+        row.Path.Text = dialog.FileName;
+        row.Enabled.IsChecked = true;
+    }
+
+    private static List<string> GetImagePaths(List<ImageRow> rows)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var path = row.Path.Text.Trim();
+            if (path.Length == 0 || !seen.Add(path)) continue;
+            result.Add(path);
+            if (result.Count >= 24) break;
+        }
+        return result;
+    }
+
+    private static List<string> GetDisabledImagePaths(List<ImageRow> rows)
+    {
+        return rows
+            .Where(row => row.Enabled.IsChecked != true && !string.IsNullOrWhiteSpace(row.Path.Text))
+            .Select(row => row.Path.Text.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
@@ -457,14 +580,17 @@ public partial class SettingsWindow : Window
         if (WorkSatCheck.IsChecked == true) workDays.Add(6);
         if (WorkSunCheck.IsChecked == true) workDays.Add(0);
 
-        var main = SplitLines(MainImagesBox.Text);
-        var idle = SplitLines(IdleImagesBox.Text);
-        var play = SplitLines(PlayImagesBox.Text);
+        var main = GetImagePaths(_mainRows);
+        var idle = GetImagePaths(_idleRows);
+        var play = GetImagePaths(_playRows);
         var phrases = SplitLines(PhrasesBox.Text);
         var chatPhrases = SplitLines(ChatPhrasesBox.Text);
-        if (main.Count < 1 || idle.Count < 1 || play.Count < 1)
+        var mainEnabled = _mainRows.Count(row => !string.IsNullOrWhiteSpace(row.Path.Text) && row.Enabled.IsChecked == true);
+        var idleEnabled = _idleRows.Count(row => !string.IsNullOrWhiteSpace(row.Path.Text) && row.Enabled.IsChecked == true);
+        var playEnabled = _playRows.Count(row => !string.IsNullOrWhiteSpace(row.Path.Text) && row.Enabled.IsChecked == true);
+        if (mainEnabled < 1 || idleEnabled < 1 || playEnabled < 1)
         {
-            ShowNotice("主形象、空闲形象、互动形象都至少需要 1 张图片。");
+            ShowNotice("主形象、空闲形象、互动形象都至少需要 1 张已启用图片。");
             return;
         }
         if (phrases.Count < 1)
@@ -550,6 +676,9 @@ public partial class SettingsWindow : Window
         Settings.MainImages = main;
         Settings.IdleImages = idle;
         Settings.PlayImages = play;
+        Settings.DisabledMainImages = GetDisabledImagePaths(_mainRows);
+        Settings.DisabledIdleImages = GetDisabledImagePaths(_idleRows);
+        Settings.DisabledPlayImages = GetDisabledImagePaths(_playRows);
         Settings.InteractionPhrases = phrases;
         Settings.ChatPhrases = chatPhrases.Count > 0 ? chatPhrases : PetSettings.CreateDefault().ChatPhrases;
         Settings.Normalize();
@@ -570,5 +699,19 @@ public partial class SettingsWindow : Window
             if (result.Count >= 24) break;
         }
         return result;
+    }
+
+    private sealed class ImageRow
+    {
+        public ImageRow(Grid container, CheckBox enabled, TextBox path)
+        {
+            Container = container;
+            Enabled = enabled;
+            Path = path;
+        }
+
+        public Grid Container { get; }
+        public CheckBox Enabled { get; }
+        public TextBox Path { get; }
     }
 }

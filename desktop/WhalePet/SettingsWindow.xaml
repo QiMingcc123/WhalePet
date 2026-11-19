@@ -495,36 +495,21 @@
                 <CheckBox x:Name="ClipboardCheck" Content="启用剪贴板历史（只记录文本，最多 50 条）"/>
                 <CheckBox x:Name="LockScreenCheck" Content="显示一键锁屏按钮"/>
 
-                <TextBlock Text="角色形象（每行一个路径，至少 1 张；支持绝对路径或相对本程序的 Assets 路径）" Style="{StaticResource Section}"/>
+                <TextBlock Text="角色形象（勾选启用；支持绝对路径或相对本程序的 Assets 路径）" Style="{StaticResource Section}"/>
                 <TextBlock Text="主形象" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="MainImagesBox" AcceptsReturn="True" Height="76" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
-                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnBrowseMain"/>
-                </Grid>
+                <StackPanel x:Name="MainImageRows" Margin="0,2,0,2"/>
+                <Button Content="添加主形象图片…" Style="{StaticResource Action}" HorizontalAlignment="Left"
+                        Margin="0,2,0,8" Click="OnAddMainImage"/>
                 <TextBlock Text="空闲 / 休眠形象" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="IdleImagesBox" AcceptsReturn="True" Height="76" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
-                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnBrowseIdle"/>
-                </Grid>
+                <StackPanel x:Name="IdleImageRows" Margin="0,2,0,2"/>
+                <Button Content="添加空闲形象图片…" Style="{StaticResource Action}" HorizontalAlignment="Left"
+                        Margin="0,2,0,8" Click="OnAddIdleImage"/>
                 <TextBlock Text="互动形象" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="PlayImagesBox" AcceptsReturn="True" Height="90" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
-                    <Button Grid.Column="1" Content="浏览…" Style="{StaticResource Action}" Margin="6,0,0,0" VerticalAlignment="Top" Click="OnBrowsePlay"/>
-                </Grid>
-                <TextBlock Text="删除图片：直接删掉对应行；每种状态少于 1 张时无法保存。"
-                           Foreground="#6F8CA6" FontSize="9" Margin="0,4,0,0"/>
+                <StackPanel x:Name="PlayImageRows" Margin="0,2,0,2"/>
+                <Button Content="添加互动形象图片…" Style="{StaticResource Action}" HorizontalAlignment="Left"
+                        Margin="0,2,0,8" Click="OnAddPlayImage"/>
+                <TextBlock Text="每张图片前的勾选框控制是否启用；新增图片默认启用；每种状态至少保留 1 张启用图片。"
+                           Foreground="#6F8CA6" FontSize="9" Margin="0,2,0,0"/>
                 <TextBlock Text="点击互动的短句（每行一条，至少 1 条）" Style="{StaticResource Section}"/>
                 <TextBox x:Name="PhrasesBox" AcceptsReturn="True" Height="92" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top"/>
                 <TextBlock Text="主动聊天内容（每行一条；间隔大于 0 时至少 1 条）" Style="{StaticResource Section}"/>

@@ -11,7 +11,7 @@ namespace WhalePet;
 /// </summary>
 public static class PersistentStore
 {
-    private const int MaxBackups = 12;
+    public const int MaxBackups = 1;
 
     public static string LocalDirectory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -91,11 +91,36 @@ public static class PersistentStore
         saved |= WriteAtomic(RoamingPath(fileName), json);
         saved |= WriteAtomic(HomePath(fileName), json);
 
-        var backup = Path.Combine(BackupDirectory, stem + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + ".json");
-        WriteAtomic(backup, json);
+        // Keep exactly one rolling backup per document type. The last-good copy is
+        // always the newest and is also used as a recovery candidate.
         WriteAtomic(Path.Combine(BackupDirectory, stem + ".lastgood.json"), json);
-        PruneBackups(stem);
+        CleanupBackups();
         return saved;
+    }
+
+    /// <summary>
+    /// Removes the old timestamped backups and leaves one ".lastgood.json" per
+    /// document type. Safe to call at startup and after every save.
+    /// </summary>
+    public static void CleanupBackups()
+    {
+        try
+        {
+            if (!Directory.Exists(BackupDirectory)) return;
+            foreach (var path in Directory.GetFiles(BackupDirectory, "*.json"))
+            {
+                var name = Path.GetFileName(path);
+                // Timestamped backups look like settings-20260101-120000-000.json.
+                if (name.Contains('-', StringComparison.Ordinal))
+                {
+                    try { File.Delete(path); } catch { }
+                }
+            }
+        }
+        catch
+        {
+            // Cleanup is best effort.
+        }
     }
 
     private static IEnumerable<string> LegacyPaths(string fileName)
@@ -151,27 +176,6 @@ public static class PersistentStore
                 // Leave the previous copy in place.
             }
             return false;
-        }
-    }
-
-    private static void PruneBackups(string stem)
-    {
-        try
-        {
-            if (!Directory.Exists(BackupDirectory)) return;
-            var files = Directory.GetFiles(BackupDirectory, stem + "-*.json")
-                .Select(path => new FileInfo(path))
-                .OrderByDescending(info => info.LastWriteTimeUtc)
-                .Skip(MaxBackups)
-                .ToList();
-            foreach (var file in files)
-            {
-                try { file.Delete(); } catch { }
-            }
-        }
-        catch
-        {
-            // Cleanup is best effort.
         }
     }
 

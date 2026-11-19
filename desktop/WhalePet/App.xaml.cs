@@ -21,6 +21,7 @@ public partial class App : Application
         }
 
         AssetBootstrapper.Ensure();
+        PersistentStore.CleanupBackups();
         base.OnStartup(e);
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;

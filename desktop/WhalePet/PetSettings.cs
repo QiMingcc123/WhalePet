@@ -81,6 +81,9 @@ public sealed class PetSettings
     public List<string> MainImages { get; set; } = new();
     public List<string> IdleImages { get; set; } = new();
     public List<string> PlayImages { get; set; } = new();
+    public List<string> DisabledMainImages { get; set; } = new();
+    public List<string> DisabledIdleImages { get; set; } = new();
+    public List<string> DisabledPlayImages { get; set; } = new();
     public List<string> InteractionPhrases { get; set; } = new();
 
     public double? WindowLeft { get; set; }
@@ -191,6 +194,9 @@ public sealed class PetSettings
             MainImages = MainImages.ToList(),
             IdleImages = IdleImages.ToList(),
             PlayImages = PlayImages.ToList(),
+            DisabledMainImages = DisabledMainImages.ToList(),
+            DisabledIdleImages = DisabledIdleImages.ToList(),
+            DisabledPlayImages = DisabledPlayImages.ToList(),
             InteractionPhrases = InteractionPhrases.ToList(),
             WindowLeft = WindowLeft,
             WindowTop = WindowTop,
@@ -251,6 +257,9 @@ public sealed class PetSettings
         MainImages = CleanList(MainImages, defaults.MainImages);
         IdleImages = CleanList(IdleImages, defaults.IdleImages);
         PlayImages = CleanList(PlayImages, defaults.PlayImages);
+        DisabledMainImages = CleanDisabled(DisabledMainImages, MainImages);
+        DisabledIdleImages = CleanDisabled(DisabledIdleImages, IdleImages);
+        DisabledPlayImages = CleanDisabled(DisabledPlayImages, PlayImages);
         InteractionPhrases = CleanList(InteractionPhrases, defaults.InteractionPhrases);
         ChatPhrases = CleanList(ChatPhrases, defaults.ChatPhrases);
     }
@@ -359,6 +368,20 @@ public sealed class PetSettings
             if (result.Count >= 24) break;
         }
         if (result.Count == 0) result.AddRange(fallback);
+        return result;
+    }
+
+    private static List<string> CleanDisabled(List<string>? values, List<string> images)
+    {
+        var valid = new HashSet<string>(images, StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var value in values ?? new List<string>())
+        {
+            var text = (value ?? "").Trim();
+            if (text.Length == 0 || !valid.Contains(text) || !seen.Add(text)) continue;
+            result.Add(text);
+        }
         return result;
     }
 }

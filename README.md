@@ -94,7 +94,7 @@ dist\WhalePet.exe
 
 - 展开状态栏可显示设备信息：内存、CPU、显卡、系统盘使用情况，以及**网络状态和实时上传/下载速度**（取不到的传感器会自动省略）。
 
-- 支持工作日、上下班时间、上班“搬砖中”侧边提示，以及可自定义提前分钟数的下班前提醒/下班时提醒。
+- 支持工作日、上下班时间、上班“搬砖中”侧边提示，以及可自定义提前分钟数的下班前提醒/下班时提醒。主形象、空闲/休眠形象、互动形象中的每个图片链接前都有独立勾选框，可直接启用或停用，新增图片默认启用；每种形象至少保留一张启用图片。
 
 - 支持拖到屏幕边缘自动收起为贴边小标签，鼠标移入展开、移出收起，可在设置中关闭。
 
@@ -166,7 +166,7 @@ dist\WhalePet.exe
 
 - 配置路径支持左键复制、右键打开所在文件夹。
 
-- 设置和备忘录同时保存到 `%LOCALAPPDATA%`、`%APPDATA%` 和用户目录 `.whalepet` 三份，并保留滚动备份；替换 exe 或某一份损坏时会自动读取最新的有效副本。
+- 设置和备忘录同时保存到 `%LOCALAPPDATA%`、`%APPDATA%` 和用户目录 `.whalepet` 三份，并保留最新 1 份滚动备份；替换 exe 或某一份损坏时会自动读取最新的有效副本。
 
 - 搬砖提示框位于状态栏上方约 12px，并保持在状态栏横向范围内。
 
@@ -190,7 +190,7 @@ dist\WhalePet.exe
 %LOCALAPPDATA%\DSHWhalePet\settings.json
 %APPDATA%\DSHWhalePet\settings.json
 %USERPROFILE%\.whalepet\settings.json
-%LOCALAPPDATA%\DSHWhalePet\backup\settings-*.json
+%LOCALAPPDATA%\DSHWhalePet\backup\settings.lastgood.json
 ```
 
 首次启动会把内嵌图片解压到：
@@ -199,9 +199,9 @@ dist\WhalePet.exe
 %LOCALAPPDATA%\DSHWhalePet\assets
 ```
 
-备忘录保存到同样的三个目录，文件名是 `memos.json`，并在 `%LOCALAPPDATA%\DSHWhalePet\backup` 保留滚动备份。剪贴板历史保存为同目录下的 `clipboard.json`，只记录文本，最多 50 条。
+备忘录保存到同样的三个目录，文件名是 `memos.json`，并在 `%LOCALAPPDATA%\DSHWhalePet\backup` 保留最新 1 份备份。剪贴板历史保存为同目录下的 `clipboard.json`，只记录文本，最多 50 条。
 
-保存时使用临时文件 + 原子替换，避免异常退出把 JSON 写坏；启动时按修改时间读取最新的有效副本，主文件损坏时会自动从备份恢复。替换或更新 exe 不会影响这些目录。
+保存时使用临时文件 + 原子替换，避免异常退出把 JSON 写坏；启动和每次保存时会清理旧的时间戳备份，每种文档只保留一个最新的 `.lastgood.json` 备份。主文件损坏时会自动从备份恢复。替换或更新 exe 不会影响这些目录。
 
 默认配置使用这些图片；也可以填任意本地绝对路径。删掉 `assets` 文件夹后重新启动，会从 exe 内嵌资源重新解压。
 
