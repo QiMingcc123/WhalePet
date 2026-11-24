@@ -45,6 +45,7 @@ public sealed class GlobalInputHook : IDisposable
     private bool _disposed;
 
     public event Action? KeyboardPressed;
+    public event Action<int>? KeyPressed;
     public event Action<int, int>? PointerMoved;
     public event Action<int, int>? PointerPressed;
 
@@ -66,7 +67,9 @@ public sealed class GlobalInputHook : IDisposable
                 var message = wParam.ToInt32();
                 if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
                 {
+                    var virtualKey = wParam.ToInt32();
                     KeyboardPressed?.Invoke();
+                    KeyPressed?.Invoke(virtualKey);
                 }
                 else if (message == WM_MOUSEMOVE)
                 {

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows;
+using WhalePet.Game;
 
 namespace WhalePet;
 
@@ -21,6 +22,7 @@ public partial class App : Application
         }
 
         AssetBootstrapper.Ensure();
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         PersistentStore.CleanupBackups();
         base.OnStartup(e);
 
@@ -29,6 +31,14 @@ public partial class App : Application
         {
             var splash = new SplashWindow();
             await splash.ShowAsync();
+
+            GameRuntime.Initialize();
+            if (GameRuntime.Error is not null)
+            {
+                MessageBox.Show("角色面板数据初始化失败：" + GameRuntime.Error +
+                                "\n\n桌宠本体仍可使用，但角色面板、动态图与养成数据不可用。",
+                    "鲸鱼娘", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
 
             var main = new MainWindow();
             MainWindow = main;
@@ -44,6 +54,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        GameRuntime.Shutdown();
         try
         {
             _singleInstanceMutex?.ReleaseMutex();

@@ -1,6 +1,8 @@
 # Build intermediates
 desktop/WhalePet/bin/
 desktop/WhalePet/obj/
+tools/**/bin/
+tools/**/obj/
 dist/publish-tmp/
 *.user
 .vs/
@@ -12,3 +14,4 @@ verification
 # OS files
 Thumbs.db
 desktop.ini
+desktop/WhalePet/Assets/gifs.enc

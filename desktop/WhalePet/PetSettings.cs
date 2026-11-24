@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace WhalePet;
@@ -11,6 +12,52 @@ public sealed class PetSettings
     public bool GreetingEnabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
     public bool ShowSettingsButton { get; set; } = false;
+    public bool ShowCharacterPanel { get; set; } = true;
+    public double PanelOpacity { get; set; } = 1.0;
+    public double PanelScale { get; set; } = 1.0;
+    public double? PanelLeft { get; set; }
+    public double? PanelTop { get; set; }
+    public bool PanelHotkeyCtrl { get; set; } = true;
+    public bool PanelHotkeyAlt { get; set; } = true;
+    public bool PanelHotkeyShift { get; set; } = false;
+    public bool PanelHotkeyWin { get; set; } = false;
+    public string PanelHotkeyKey { get; set; } = "P";
+    public double FishingOverlayScale { get; set; } = 1.0;
+    public double CookingOverlayScale { get; set; } = 1.0;
+    public double MiniGameOpacity { get; set; } = 1.0;
+
+    public bool ReadingEnabled { get; set; } = false;
+    public string ReadingTextPath { get; set; } = "";
+    public double ReadingWidth { get; set; } = 200;
+    public double ReadingHeight { get; set; } = 60;
+    public double? ReadingLeft { get; set; }
+    public double? ReadingTop { get; set; }
+    public string ReadingBackground { get; set; } = "#081A32";
+    public double ReadingBackgroundOpacity { get; set; } = 0.85;
+    public double ReadingFontSize { get; set; } = 14;
+    public string ReadingTextColor { get; set; } = "#EAF6FF";
+    public double ReadingTextOpacity { get; set; } = 1.0;
+    public string ReadingFontFamily { get; set; } = "Microsoft YaHei UI";
+    public double ReadingLineHeight { get; set; } = 1.5;
+    public int ReadingCharsPerPage { get; set; } = 20;
+    public string ReadingEncoding { get; set; } = "自动检测";
+    public int ReadingPageIndex { get; set; } = 1;
+    public string ReadingShowHotkey { get; set; } = "Ctrl+Alt+M";
+    public string ReadingPrevHotkey { get; set; } = "Ctrl+,";
+    public string ReadingNextHotkey { get; set; } = "Ctrl+.";
+    public bool SettingsTocExpanded { get; set; } = false;
+
+    public bool OrganizerEnabled { get; set; } = false;
+    public double OrganizerWidth { get; set; } = 520;
+    public double OrganizerHeight { get; set; } = 420;
+    public string OrganizerBackground { get; set; } = "#081A32";
+    public double OrganizerBackgroundOpacity { get; set; } = 0.92;
+
+    public bool TodoEnabled { get; set; } = false;
+    public double TodoWidth { get; set; } = 520;
+    public double TodoHeight { get; set; } = 460;
+    public string TodoBackground { get; set; } = "#081A32";
+    public double TodoBackgroundOpacity { get; set; } = 0.92;
     public double StatusBarScale { get; set; } = 1.0;
     public int IdleMinutes { get; set; } = 5;
     public int PlaySeconds { get; set; } = 30;
@@ -89,6 +136,9 @@ public sealed class PetSettings
     public double? WindowLeft { get; set; }
     public double? WindowTop { get; set; }
 
+    /// <summary>Unix milliseconds of the last explicit settings save. Zero means an older file.</summary>
+    public long SettingsSavedAt { get; set; }
+
     [JsonIgnore]
     public string ConfigPath => SettingsStore.ConfigPath;
 
@@ -131,6 +181,49 @@ public sealed class PetSettings
             GreetingEnabled = GreetingEnabled,
             StartWithWindows = StartWithWindows,
             ShowSettingsButton = ShowSettingsButton,
+            ShowCharacterPanel = ShowCharacterPanel,
+            PanelOpacity = PanelOpacity,
+            PanelScale = PanelScale,
+            PanelLeft = PanelLeft,
+            PanelTop = PanelTop,
+            PanelHotkeyCtrl = PanelHotkeyCtrl,
+            PanelHotkeyAlt = PanelHotkeyAlt,
+            PanelHotkeyShift = PanelHotkeyShift,
+            PanelHotkeyWin = PanelHotkeyWin,
+            PanelHotkeyKey = PanelHotkeyKey,
+            FishingOverlayScale = FishingOverlayScale,
+            CookingOverlayScale = CookingOverlayScale,
+            MiniGameOpacity = MiniGameOpacity,
+            ReadingEnabled = ReadingEnabled,
+            ReadingTextPath = ReadingTextPath,
+            ReadingWidth = ReadingWidth,
+            ReadingHeight = ReadingHeight,
+            ReadingLeft = ReadingLeft,
+            ReadingTop = ReadingTop,
+            ReadingBackground = ReadingBackground,
+            ReadingBackgroundOpacity = ReadingBackgroundOpacity,
+            ReadingFontSize = ReadingFontSize,
+            ReadingTextColor = ReadingTextColor,
+            ReadingTextOpacity = ReadingTextOpacity,
+            ReadingFontFamily = ReadingFontFamily,
+            ReadingLineHeight = ReadingLineHeight,
+            ReadingCharsPerPage = ReadingCharsPerPage,
+            ReadingEncoding = ReadingEncoding,
+            ReadingPageIndex = ReadingPageIndex,
+            ReadingShowHotkey = ReadingShowHotkey,
+            ReadingPrevHotkey = ReadingPrevHotkey,
+            ReadingNextHotkey = ReadingNextHotkey,
+            SettingsTocExpanded = SettingsTocExpanded,
+            OrganizerEnabled = OrganizerEnabled,
+            OrganizerWidth = OrganizerWidth,
+            OrganizerHeight = OrganizerHeight,
+            OrganizerBackground = OrganizerBackground,
+            OrganizerBackgroundOpacity = OrganizerBackgroundOpacity,
+            TodoEnabled = TodoEnabled,
+            TodoWidth = TodoWidth,
+            TodoHeight = TodoHeight,
+            TodoBackground = TodoBackground,
+            TodoBackgroundOpacity = TodoBackgroundOpacity,
             StatusBarScale = StatusBarScale,
             IdleMinutes = IdleMinutes,
             PlaySeconds = PlaySeconds,
@@ -200,6 +293,7 @@ public sealed class PetSettings
             InteractionPhrases = InteractionPhrases.ToList(),
             WindowLeft = WindowLeft,
             WindowTop = WindowTop,
+            SettingsSavedAt = SettingsSavedAt,
         };
     }
 
@@ -207,6 +301,50 @@ public sealed class PetSettings
     {
         IdleMinutes = Math.Clamp(IdleMinutes, 1, 240);
         StatusBarScale = Math.Clamp(Math.Round(StatusBarScale, 2), 0.5, 2);
+        if (!double.IsFinite(PanelOpacity)) PanelOpacity = 1.0;
+        PanelOpacity = Math.Clamp(PanelOpacity, 0, 1);
+        if (!double.IsFinite(PanelScale)) PanelScale = 1.0;
+        PanelScale = Math.Clamp(Math.Round(PanelScale, 2), 0.5, 2);
+        PanelHotkeyKey = NormalizeScreenshotKey(PanelHotkeyKey);
+        if (!double.IsFinite(FishingOverlayScale)) FishingOverlayScale = 1.0;
+        FishingOverlayScale = Math.Clamp(Math.Round(FishingOverlayScale, 2), 0.5, 2);
+        if (!double.IsFinite(CookingOverlayScale)) CookingOverlayScale = 1.0;
+        CookingOverlayScale = Math.Clamp(Math.Round(CookingOverlayScale, 2), 0.5, 2);
+        if (!double.IsFinite(MiniGameOpacity)) MiniGameOpacity = 1.0;
+        MiniGameOpacity = Math.Clamp(MiniGameOpacity, 0, 1);
+        if (PanelLeft is not null && !double.IsFinite(PanelLeft.Value)) PanelLeft = null;
+        if (PanelTop is not null && !double.IsFinite(PanelTop.Value)) PanelTop = null;
+
+        ReadingWidth = Math.Clamp(Math.Round(ReadingWidth, 0), 30, 1200);
+        ReadingHeight = Math.Clamp(Math.Round(ReadingHeight, 0), 30, 800);
+        if (ReadingLeft is not null && !double.IsFinite(ReadingLeft.Value)) ReadingLeft = null;
+        if (ReadingTop is not null && !double.IsFinite(ReadingTop.Value)) ReadingTop = null;
+        ReadingBackground = ColorOr(ReadingBackground, "#081A32");
+        ReadingBackgroundOpacity = Math.Clamp(ReadingBackgroundOpacity, 0, 1);
+        ReadingFontSize = Math.Clamp(Math.Round(ReadingFontSize, 1), 8, 40);
+        ReadingTextColor = ColorOr(ReadingTextColor, "#EAF6FF");
+        ReadingTextOpacity = Math.Clamp(ReadingTextOpacity, 0, 1);
+        ReadingFontFamily = NormalizeText(ReadingFontFamily, "Microsoft YaHei UI", 120);
+        ReadingLineHeight = Math.Clamp(Math.Round(ReadingLineHeight, 1), 1.0, 2.0);
+        ReadingCharsPerPage = Math.Clamp(ReadingCharsPerPage, 1, 1500);
+        ReadingEncoding = ReadingEncodings.Contains(ReadingEncoding) ? ReadingEncoding : ReadingEncodings[0];
+        ReadingPageIndex = Math.Max(1, ReadingPageIndex);
+        ReadingTextPath = (ReadingTextPath ?? "").Trim();
+        if (ReadingTextPath.Length > 500) ReadingTextPath = ReadingTextPath[..500];
+        ReadingShowHotkey = NormalizeOptionalHotkey(ReadingShowHotkey, "Ctrl+Alt+M");
+        ReadingPrevHotkey = NormalizeOptionalHotkey(
+            MigrateLegacyReadingHotkey(ReadingPrevHotkey, "PageUp", "Ctrl+,"), "Ctrl+,");
+        ReadingNextHotkey = NormalizeOptionalHotkey(
+            MigrateLegacyReadingHotkey(ReadingNextHotkey, "PageDown", "Ctrl+."), "Ctrl+.");
+
+        OrganizerWidth = Math.Clamp(Math.Round(OrganizerWidth, 0), 300, 1200);
+        OrganizerHeight = Math.Clamp(Math.Round(OrganizerHeight, 0), 300, 1000);
+        OrganizerBackground = ColorOr(OrganizerBackground, "#081A32");
+        OrganizerBackgroundOpacity = Math.Clamp(OrganizerBackgroundOpacity, 0, 1);
+        TodoWidth = Math.Clamp(Math.Round(TodoWidth, 0), 300, 1200);
+        TodoHeight = Math.Clamp(Math.Round(TodoHeight, 0), 300, 1000);
+        TodoBackground = ColorOr(TodoBackground, "#081A32");
+        TodoBackgroundOpacity = Math.Clamp(TodoBackgroundOpacity, 0, 1);
         PlaySeconds = Math.Clamp(PlaySeconds, 5, 600);
         TransitionMs = Math.Clamp(TransitionMs, 120, 2000);
         if (!double.IsFinite(Scale)) Scale = 1.0;
@@ -303,6 +441,36 @@ public sealed class PetSettings
             .Concat(Enumerable.Range(0, 10).Select(number => number.ToString()))
             .Concat(Enumerable.Range(1, 12).Select(number => "F" + number))
             .ToArray();
+
+    public static readonly string[] ReadingEncodings =
+    {
+        "自动检测", "UTF-8", "GBK", "GB2312", "GB18030",
+    };
+
+    public static string NormalizeHotkey(string? value, string fallback)
+    {
+        var text = (value ?? "").Trim();
+        if (text.Length == 0) return fallback;
+        text = string.Join("+", text.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return text.Length > 40 ? text[..40] : text;
+    }
+
+    private static string MigrateLegacyReadingHotkey(string? value, string legacy, string replacement)
+    {
+        var text = (value ?? "").Trim();
+        return text.Equals(legacy, StringComparison.OrdinalIgnoreCase) ||
+               (legacy == "PageUp" && text.Equals("PgUp", StringComparison.OrdinalIgnoreCase)) ||
+               (legacy == "PageDown" && text.Equals("PgDn", StringComparison.OrdinalIgnoreCase))
+            ? replacement
+            : text;
+    }
+
+    private static string NormalizeOptionalHotkey(string? value, string fallback)
+    {
+        var text = NormalizeHotkey(value, "");
+        if (text.Length == 0) return "";
+        return HotkeyGesture.TryParse(text, out var gesture) ? gesture.Display : fallback;
+    }
 
     public static string NormalizeScreenshotKey(string? value)
     {
@@ -405,16 +573,16 @@ public static class SettingsStore
 
     public static PetSettings Load()
     {
+        var candidates = new List<(string Json, PetSettings Settings)>();
         foreach (var json in PersistentStore.ReadCandidates(FileName))
         {
             try
             {
                 var settings = JsonSerializer.Deserialize<PetSettings>(json, JsonOptions);
-                if (settings is not null)
-                {
-                    settings.Normalize();
-                    return settings;
-                }
+                if (settings is null) continue;
+                settings.Normalize();
+                candidates.Add((json, settings));
+                if (candidates.Count >= 12) break;
             }
             catch
             {
@@ -422,14 +590,103 @@ public static class SettingsStore
             }
         }
 
-        var fallback = PetSettings.CreateDefault();
-        fallback.Normalize();
-        return fallback;
+        if (candidates.Count == 0)
+        {
+            var fallback = PetSettings.CreateDefault();
+            fallback.Normalize();
+            return fallback;
+        }
+
+        // Files saved explicitly by the app carry a revision marker. Prefer them
+        // over shipped/default files that have never been saved by the user.
+        var ordered = candidates
+            .Select((candidate, index) => (Candidate: candidate, Index: index))
+            .OrderByDescending(item => item.Candidate.Settings.SettingsSavedAt > 0)
+            .ThenByDescending(item => item.Candidate.Settings.SettingsSavedAt)
+            .ThenBy(item => item.Index)
+            .ToList();
+        var chosen = ordered[0].Candidate;
+
+        // Recovery for older installations where an update package replaced the
+        // config with a fresh default document. Do not cross to an older
+        // candidate merely because it has different window positions or paths.
+        if (chosen.Settings.SettingsSavedAt == 0 && IsEffectivelyDefault(chosen.Settings))
+        {
+            var alternate = ordered.Skip(1)
+                .Select(item => item.Candidate)
+                .FirstOrDefault(candidate => !IsEffectivelyDefault(candidate.Settings));
+            if (alternate.Settings is not null) chosen = alternate;
+        }
+
+        var merged = MergeMissingFields(chosen.Json,
+            ordered.Select(item => item.Candidate.Json)
+                .Where(json => !ReferenceEquals(json, chosen.Json)));
+        return merged ?? chosen.Settings;
+    }
+
+    private static bool IsEffectivelyDefault(PetSettings settings)
+    {
+        try
+        {
+            var defaults = PetSettings.CreateDefault();
+            defaults.Normalize();
+            settings.Normalize();
+            return ComparableSettingsJson(settings) == ComparableSettingsJson(defaults);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string ComparableSettingsJson(PetSettings settings)
+    {
+        if (JsonNode.Parse(JsonSerializer.Serialize(settings, JsonOptions)) is not JsonObject root)
+            return "";
+        foreach (var key in new[]
+                 {
+                     "SettingsSavedAt", "WindowLeft", "WindowTop",
+                     "PanelLeft", "PanelTop", "ReadingLeft", "ReadingTop",
+                 })
+        {
+            root.Remove(key);
+        }
+        return root.ToJsonString();
+    }
+
+    private static PetSettings? MergeMissingFields(string baseJson, IEnumerable<string> olderJson)
+    {
+        try
+        {
+            if (JsonNode.Parse(baseJson) is not JsonObject root) return null;
+            foreach (var json in olderJson)
+            {
+                if (JsonNode.Parse(json) is not JsonObject older) continue;
+                foreach (var property in older)
+                {
+                    if (root.Any(existing =>
+                            string.Equals(existing.Key, property.Key, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+                    if (property.Value is not null)
+                        root[property.Key] = property.Value.DeepClone();
+                }
+            }
+            var settings = root.Deserialize<PetSettings>(JsonOptions);
+            settings?.Normalize();
+            return settings;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public static void Save(PetSettings settings)
     {
         settings.Normalize();
+        settings.SettingsSavedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         PersistentStore.Save(FileName, json);
     }

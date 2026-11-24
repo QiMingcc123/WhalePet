@@ -1,0 +1,56 @@
+<Window x:Class="WhalePet.ReadingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="阅读区域"
+        Width="200"
+        Height="60"
+        MinWidth="30"
+        MinHeight="30"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Focusable="True"
+        WindowStartupLocation="Manual"
+        FontFamily="Microsoft YaHei UI"
+        Loaded="OnLoaded"
+        Activated="OnActivated"
+        Deactivated="OnDeactivated"
+        SourceInitialized="OnSourceInitialized"
+        LocationChanged="OnBoundsChanged"
+        SizeChanged="OnBoundsChanged"
+        KeyDown="OnKeyDown"
+        PreviewMouseLeftButtonDown="OnPreviewMouseDown"
+        Closing="OnClosing"
+        Closed="OnClosed">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Border x:Name="RootBorder" CornerRadius="8" BorderBrush="#558FD3FF" BorderThickness="1">
+        <Grid Background="Transparent">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border x:Name="EncodingWarning" Grid.Row="0" Visibility="Collapsed"
+                    Background="#CC5A2A16" CornerRadius="6" Padding="6,3" Margin="4,4,4,0"
+                    IsHitTestVisible="False">
+                <TextBlock Text="编码识别可能不正确" Foreground="#FFD7A8" FontSize="9"
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <Grid Grid.Row="1" ClipToBounds="True" Margin="7,5,7,6">
+                <TextBlock x:Name="BodyText" TextWrapping="Wrap" TextAlignment="Left"
+                           VerticalAlignment="Top" FontFamily="Microsoft YaHei UI"
+                           FontSize="14" Foreground="#EAF6FF" IsHitTestVisible="False"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

@@ -13,6 +13,9 @@ public static class PersistentStore
 {
     public const int MaxBackups = 1;
 
+    /// <summary>When true, shutdown/cleanup code can remove data without stores recreating it.</summary>
+    public static bool SuppressWrites { get; set; }
+
     public static string LocalDirectory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DSHWhalePet");
@@ -40,14 +43,15 @@ public static class PersistentStore
     /// </summary>
     public static IEnumerable<string> ReadCandidates(string fileName)
     {
-        var paths = new List<string>();
+        var stable = new List<string>();
+        var legacy = new List<string>();
         var stem = Path.GetFileNameWithoutExtension(fileName);
 
-        void Add(string path)
+        void Add(List<string> target, string path)
         {
             try
             {
-                if (File.Exists(path)) paths.Add(path);
+                if (File.Exists(path)) target.Add(path);
             }
             catch
             {
@@ -55,16 +59,20 @@ public static class PersistentStore
             }
         }
 
-        Add(PrimaryPath(fileName));
-        Add(RoamingPath(fileName));
-        Add(HomePath(fileName));
-        Add(Path.Combine(BackupDirectory, stem + ".lastgood.json"));
+        // User-owned locations always win over files shipped beside the executable.
+        // This prevents a default settings.json in an update package from
+        // overwriting the user's configuration.
+        Add(stable, PrimaryPath(fileName));
+        Add(stable, RoamingPath(fileName));
+        Add(stable, HomePath(fileName));
+        Add(stable, Path.Combine(BackupDirectory, stem + ".lastgood.json"));
+        Add(stable, Path.Combine(BackupDirectory, stem + ".previous.json"));
 
         try
         {
             if (Directory.Exists(BackupDirectory))
             {
-                paths.AddRange(Directory.GetFiles(BackupDirectory, stem + "-*.json"));
+                stable.AddRange(Directory.GetFiles(BackupDirectory, stem + "-*.json"));
             }
         }
         catch
@@ -72,12 +80,23 @@ public static class PersistentStore
             // Backups are optional.
         }
 
-        foreach (var legacy in LegacyPaths(fileName)) Add(legacy);
+        foreach (var path in LegacyPaths(fileName)) Add(legacy, path);
 
-        foreach (var path in paths
+        foreach (var path in stable
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .OrderByDescending(SafeWriteTime))
         {
+            var text = SafeRead(path);
+            if (!string.IsNullOrWhiteSpace(text)) yield return text;
+        }
+
+        // Legacy copies are only a last resort. They may live inside an install
+        // directory that is overwritten by an update.
+        foreach (var path in legacy
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderByDescending(SafeWriteTime))
+        {
+            if (stable.Contains(path, StringComparer.OrdinalIgnoreCase)) continue;
             var text = SafeRead(path);
             if (!string.IsNullOrWhiteSpace(text)) yield return text;
         }
@@ -86,7 +105,21 @@ public static class PersistentStore
     /// <summary>Writes the primary copy, the roaming copy and a rolling backup.</summary>
     public static bool Save(string fileName, string json)
     {
+        if (SuppressWrites) return false;
         var stem = Path.GetFileNameWithoutExtension(fileName);
+        try
+        {
+            var previous = SafeRead(PrimaryPath(fileName));
+            if (!string.IsNullOrWhiteSpace(previous) &&
+                !string.Equals(previous, json, StringComparison.Ordinal))
+            {
+                WriteAtomic(Path.Combine(BackupDirectory, stem + ".previous.json"), previous);
+            }
+        }
+        catch
+        {
+            // A previous snapshot is a safety net, never a save blocker.
+        }
         var saved = WriteAtomic(PrimaryPath(fileName), json);
         saved |= WriteAtomic(RoamingPath(fileName), json);
         saved |= WriteAtomic(HomePath(fileName), json);

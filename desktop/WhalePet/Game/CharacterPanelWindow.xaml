@@ -1,0 +1,510 @@
+<Window x:Class="WhalePet.Game.CharacterPanelWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:game="clr-namespace:WhalePet.Game"
+        Title="鲸鱼娘 · 角色面板"
+        Width="1080"
+        Height="740"
+        MinWidth="400"
+        MinHeight="300"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        FontFamily="Microsoft YaHei UI"
+        Loaded="OnLoaded"
+        Closed="OnClosed"
+        KeyDown="OnKeyDown">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Ink" Color="#EAF6FF"/>
+        <SolidColorBrush x:Key="Muted" Color="#9AB6CE"/>
+        <SolidColorBrush x:Key="Faint" Color="#6F8CA6"/>
+        <SolidColorBrush x:Key="Accent" Color="#8FD3FF"/>
+        <SolidColorBrush x:Key="Line" Color="#2C5B84"/>
+        <SolidColorBrush x:Key="CardSurface" Color="#140E2C4C"/>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardSurface}"/>
+            <Setter Property="BorderBrush" Value="#338FD3FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14,12"/>
+        </Style>
+
+        <Style x:Key="Action" TargetType="Button">
+            <Setter Property="Background" Value="#1F8FD3FF"/>
+            <Setter Property="Foreground" Value="#DFF2FF"/>
+            <Setter Property="BorderBrush" Value="#5A8FD3FF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#608FD3FF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Action}">
+            <Setter Property="Background" Value="#4D6BFE"/>
+            <Setter Property="BorderBrush" Value="#7E93FF"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource Action}">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+        </Style>
+
+        <Style x:Key="StatBar" TargetType="ProgressBar">
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="Foreground" Value="#8FD3FF"/>
+            <Setter Property="Background" Value="#248FD3FF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+                            <Border x:Name="PART_Indicator"
+                                    HorizontalAlignment="Left"
+                                    Background="{TemplateBinding Foreground}"
+                                    CornerRadius="4"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PanelTab" TargetType="TabItem">
+            <Setter Property="Foreground" Value="#9AB6CE"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Surface"
+                                Background="Transparent"
+                                CornerRadius="8"
+                                Padding="13,7"
+                                Margin="0,0,3,0">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#2E8FD3FF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#1C8FD3FF"/>
+                                <Setter Property="Foreground" Value="#EAF6FF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PanelTabs" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Background="#140E2C4C" CornerRadius="10" Padding="4">
+                                <TabPanel IsItemsHost="True" Panel.ZIndex="1"/>
+                            </Border>
+                            <ContentPresenter x:Name="PART_SelectedContentHost"
+                                              Grid.Row="1"
+                                              Margin="0,10,0,0"
+                                              ContentSource="SelectedContent"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SubTab" TargetType="TabItem" BasedOn="{StaticResource PanelTab}">
+            <Setter Property="FontSize" Value="10.5"/>
+        </Style>
+
+        <Style x:Key="BagTab" TargetType="TabItem" BasedOn="{StaticResource PanelTab}">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Padding" Value="10,5"/>
+        </Style>
+    </Window.Resources>
+
+    <Border CornerRadius="18"
+            Background="#F507182E"
+            BorderBrush="#558FD3FF"
+            BorderThickness="1"
+            PreviewMouseLeftButtonDown="OnPanelDrag"
+            PreviewMouseWheel="OnPanelPreviewMouseWheel">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="0" Color="#000000" Opacity="0.55"/>
+        </Border.Effect>
+        <Grid Margin="18,14,18,14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="#2E8FD3FF" CornerRadius="10" Padding="8,2" VerticalAlignment="Center">
+                        <TextBlock Text="鲸" FontSize="15" FontWeight="Bold" Foreground="#8FD3FF"/>
+                    </Border>
+                    <TextBlock Text="鲸鱼娘 · 角色面板" FontSize="17" FontWeight="Bold"
+                               Foreground="#F3FAFF" Margin="9,0,0,0" VerticalAlignment="Center"/>
+                    <Border Background="#2E8FD3FF" CornerRadius="9" Padding="7,2" Margin="10,0,0,0">
+                        <TextBlock Text="V1.1.0" FontSize="9" Foreground="#CFEAFF"/>
+                    </Border>
+                    <TextBlock x:Name="HeaderHintText" FontSize="9.5" Foreground="#7FA5C5"
+                               Margin="12,2,0,0" VerticalAlignment="Center"
+                               MaxWidth="420" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource CloseButton}" Content="✕" Click="OnCloseClick"/>
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer x:Name="BodyScroll" Grid.Row="1" Margin="0,14,0,10"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <Grid x:Name="ResponsiveGrid" MinHeight="600">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="LeftColumn" Width="340"/>
+                        <ColumnDefinition x:Name="GapColumn" Width="18"/>
+                        <ColumnDefinition x:Name="RightColumn" Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Left: avatar + stats -->
+                    <Border x:Name="LeftCard" Grid.Column="0" Style="{StaticResource Card}" Padding="16,14"
+                            Height="600">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition x:Name="AvatarRow" Height="292"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="当前形象" FontSize="10" Foreground="#8FD3FF" FontWeight="Bold"/>
+                                    <TextBlock x:Name="AvatarCaptionText" Text="内置默认形象" FontSize="12"
+                                               Foreground="#EAF6FF" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                                        Background="#248FD3FF" CornerRadius="8" Padding="8,3">
+                                    <TextBlock x:Name="LevelBadgeText" Text="Lv.1" FontSize="11" FontWeight="Bold"
+                                               Foreground="#FFFFFF"/>
+                                </Border>
+                            </Grid>
+
+                            <Border Grid.Row="1" CornerRadius="14" Background="#0A1830"
+                                    BorderBrush="#2C5B84" BorderThickness="1" Margin="0,10,0,4">
+                                <Grid>
+                                    <Image x:Name="AvatarImage" Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <game:GifPlayerControl x:Name="AvatarGif" Visibility="Collapsed"/>
+                                    <Border x:Name="AvatarEmptyBadge" Visibility="Collapsed"
+                                            Background="#CC07182E" CornerRadius="10" Padding="12,8"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="尚未启用任何动态图" Foreground="#CFEAFF" FontSize="10"
+                                                   TextWrapping="Wrap" TextAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <StackPanel Grid.Row="2">
+                                <Grid Margin="0,6,0,0">
+                                    <TextBlock Text="好感度" FontSize="10.5" Foreground="#CFEAFF"/>
+                                    <TextBlock x:Name="AffectionValueText" FontSize="10.5" Foreground="#8FD3FF"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                                <ProgressBar x:Name="AffectionBar" Style="{StaticResource StatBar}" Margin="0,4,0,8"
+                                             Maximum="100" Value="0"/>
+                                <Grid>
+                                    <TextBlock Text="心情值" FontSize="10.5" Foreground="#CFEAFF"/>
+                                    <TextBlock x:Name="MoodValueText" FontSize="10.5" Foreground="#8FD3FF"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                                <ProgressBar x:Name="MoodBar" Style="{StaticResource StatBar}" Margin="0,4,0,8"
+                                             Maximum="100" Value="100"/>
+                                <Grid>
+                                    <TextBlock Text="饱食度" FontSize="10.5" Foreground="#CFEAFF"/>
+                                    <TextBlock x:Name="SatietyValueText" FontSize="10.5" Foreground="#8FD3FF"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                                <ProgressBar x:Name="SatietyBar" Style="{StaticResource StatBar}" Margin="0,4,0,8"
+                                             Maximum="100" Value="100"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="3" Margin="0,6,0,0">
+                                <Border Height="1" Background="#248FD3FF" Margin="0,2,0,9"/>
+                                <Grid Margin="0,0,0,5">
+                                    <TextBlock Text="等级经验" FontSize="10" Foreground="#9AB6CE"/>
+                                    <TextBlock x:Name="LevelProgressText" FontSize="10" Foreground="#CFEAFF"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                                <ProgressBar x:Name="LevelBar" Style="{StaticResource StatBar}" Height="6"
+                                             Maximum="100" Value="0" Margin="0,0,0,9"/>
+                                <Grid Margin="0,0,0,5">
+                                    <TextBlock Text="连续签到" FontSize="10" Foreground="#9AB6CE"/>
+                                    <TextBlock x:Name="SignStreakText" FontSize="10" Foreground="#CFEAFF"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Grid Margin="0,0,0,5">
+                                    <TextBlock Text="累计陪伴" FontSize="10" Foreground="#9AB6CE"/>
+                                    <TextBlock x:Name="CompanionText" FontSize="10" Foreground="#CFEAFF"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Grid>
+                                    <TextBlock Text="离线结算上限" FontSize="10" Foreground="#6F8CA6"/>
+                                    <TextBlock Text="100 小时" FontSize="10" Foreground="#6F8CA6"
+                                               HorizontalAlignment="Right"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Right: five tabs -->
+                    <TabControl x:Name="MainTabs" Grid.Column="2" Style="{StaticResource PanelTabs}"
+                                Height="600" SelectionChanged="OnTabChanged">
+                        <TabItem Header="任务" Style="{StaticResource PanelTab}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <Grid>
+                                                <StackPanel>
+                                                    <TextBlock x:Name="TaskDateText" FontSize="10" Foreground="#8FD3FF"/>
+                                                    <TextBlock x:Name="TaskNameText" FontSize="16" FontWeight="Bold"
+                                                               Foreground="#F3FAFF" Margin="0,4,0,2"/>
+                                                </StackPanel>
+                                                <Border x:Name="TaskStatusBadge" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Background="#248FD3FF" CornerRadius="8" Padding="9,3">
+                                                    <TextBlock x:Name="TaskStatusText" FontSize="10" Foreground="#CFEAFF"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="TaskDescriptionText" FontSize="11" Foreground="#9AB6CE"
+                                                       TextWrapping="Wrap" Margin="0,4,0,8"/>
+                                            <ProgressBar x:Name="TaskProgressBar" Style="{StaticResource StatBar}"
+                                                         Maximum="1" Value="0"/>
+                                            <Grid Margin="0,5,0,10">
+                                                <TextBlock x:Name="TaskProgressText" FontSize="10" Foreground="#9AB6CE"/>
+                                                <TextBlock x:Name="TaskRewardText" FontSize="10" Foreground="#8FD3FF"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button x:Name="TaskAcceptButton" Style="{StaticResource Primary}"
+                                                        Content="接取任务" Click="OnAcceptTaskClick"/>
+                                                <Button x:Name="TaskRefreshButton" Style="{StaticResource Action}"
+                                                        Content="刷新任务" Click="OnRefreshTaskClick"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="任务规则" FontSize="10" FontWeight="Bold" Foreground="#8FD3FF"/>
+                                            <TextBlock FontSize="10" Foreground="#9AB6CE" TextWrapping="Wrap" Margin="0,5,0,0"
+                                                       Text="每日 0 点刷新 1 个任务槽。任务接取后才开始计数，未接取或已接取未完成的任务跨天清空。完成奖励自动发放：好感 +1，并按 50% 概率随机获得寿司或鱼肉；上签翻倍，下签不加好感但仍随机给食物。"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <TabItem Header="签到" Style="{StaticResource PanelTab}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <TextBlock Text="本周签到" FontSize="10" FontWeight="Bold" Foreground="#8FD3FF"/>
+                                            <UniformGrid x:Name="WeeklySignGrid" Columns="7" Margin="0,9,0,8"/>
+                                            <Button x:Name="SignButton" Style="{StaticResource Primary}"
+                                                    Content="每日签到" Click="OnSignClick" HorizontalAlignment="Left"/>
+                                            <TextBlock x:Name="SignHintText" FontSize="10" Foreground="#9AB6CE"
+                                                       TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="周签到里程碑" FontSize="10" FontWeight="Bold" Foreground="#8FD3FF"/>
+                                            <Grid Margin="0,7,0,0">
+                                                <TextBlock x:Name="Milestone3Text" FontSize="10.5" Foreground="#CFEAFF"/>
+                                                <TextBlock x:Name="Milestone3StateText" FontSize="10" Foreground="#8FD3FF"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Grid Margin="0,5,0,0">
+                                                <TextBlock x:Name="Milestone7Text" FontSize="10.5" Foreground="#CFEAFF"/>
+                                                <TextBlock x:Name="Milestone7StateText" FontSize="10" Foreground="#8FD3FF"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <TextBlock Text="签到奖励固定为寿司 ×1；断签只影响连续签到天数，不清空本周已点亮格；周一 0 点重置。"
+                                                       FontSize="10" Foreground="#6F8CA6" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <TabItem Header="抽签" Style="{StaticResource PanelTab}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <TextBlock Text="今日签语" FontSize="10" Foreground="#8FD3FF" FontWeight="Bold"/>
+                                            <Border Background="#140E2C4C" BorderBrush="#2C5B84" BorderThickness="1"
+                                                    CornerRadius="10" Padding="12,9" Margin="0,6,0,0">
+                                                <TextBlock x:Name="LotMessageText" FontSize="11" Foreground="#CFEAFF"
+                                                           TextWrapping="Wrap" TextAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="签语只是装饰文案，不影响数值；每日随机一条并当日固定。"
+                                                       FontSize="9" Foreground="#6F8CA6" TextWrapping="Wrap"
+                                                       TextAlignment="Center" Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                                        <StackPanel HorizontalAlignment="Center" Margin="0,10,0,6">
+                                            <TextBlock Text="今日签文" FontSize="10" Foreground="#8FD3FF" HorizontalAlignment="Center"/>
+                                            <TextBlock x:Name="DrawResultText" Text="未抽签" FontSize="34" FontWeight="Bold"
+                                                       Foreground="#EAF6FF" HorizontalAlignment="Center" Margin="0,8,0,4"/>
+                                            <TextBlock x:Name="DrawHintText" FontSize="11" Foreground="#9AB6CE"
+                                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="470"/>
+                                            <Button x:Name="DrawButton" Style="{StaticResource Primary}" Content="抽签"
+                                                    Click="OnDrawClick" Margin="0,14,0,0" HorizontalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="签文效果" FontSize="10" FontWeight="Bold" Foreground="#8FD3FF"/>
+                                            <TextBlock FontSize="10.5" Foreground="#9AB6CE" TextWrapping="Wrap" Margin="0,5,0,0"
+                                                       Text="上签（10%）：当日任务奖励翻倍。&#10;中签（80%）：保持原样。&#10;下签（10%）：当日任务只给食物。&#10;抽签结果当日 0 点失效，只影响完成时间晚于抽签时间的任务。"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <TabItem Header="背包" Style="{StaticResource PanelTab}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <Grid>
+                                                <TextBlock Text="背包" FontSize="10" FontWeight="Bold" Foreground="#8FD3FF"/>
+                                                <TextBlock x:Name="BagCapacityText" FontSize="9.5" Foreground="#9AB6CE"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <TabControl x:Name="BagTabs" Style="{StaticResource PanelTabs}" Margin="0,7,0,0"
+                                                        SelectionChanged="OnBagTabChanged">
+                                                <TabItem Header="食物" Style="{StaticResource BagTab}">
+                                                    <ScrollViewer Height="196" VerticalScrollBarVisibility="Auto"
+                                                                  HorizontalScrollBarVisibility="Disabled">
+                                                        <WrapPanel x:Name="FoodSlotsPanel" Margin="0,2,0,2"/>
+                                                    </ScrollViewer>
+                                                </TabItem>
+                                                <TabItem Header="食材" Style="{StaticResource BagTab}">
+                                                    <ScrollViewer Height="196" VerticalScrollBarVisibility="Auto"
+                                                                  HorizontalScrollBarVisibility="Disabled">
+                                                        <WrapPanel x:Name="IngredientSlotsPanel" Margin="0,2,0,2"/>
+                                                    </ScrollViewer>
+                                                </TabItem>
+                                            </TabControl>
+                                            <TextBlock Text="点击食物可投喂（寿司 +40、鱼肉 +20 饱食度）；点击食材会提示先烹饪。"
+                                                       FontSize="9" Foreground="#6F8CA6" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <Grid>
+                                                <TextBlock Text="暂存区" FontSize="10" FontWeight="Bold" Foreground="#FFD77A"/>
+                                                <TextBlock x:Name="StagingCountText" FontSize="9.5" Foreground="#9AB6CE"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <WrapPanel x:Name="StagingPanel" Margin="0,7,0,3"/>
+                                            <TextBlock x:Name="StagingHintText" FontSize="9" Foreground="#6F8CA6"
+                                                       TextWrapping="Wrap"
+                                                       Text="最多 20 个物品，每日 0 点清空。背包有空位时会自动移入。"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Style="{StaticResource Card}" Margin="0,10,0,0">
+                                        <StackPanel>
+                                            <Grid>
+                                                <TextBlock Text="动态图墙" FontSize="10" FontWeight="Bold" Foreground="#8FD3FF"/>
+                                                <TextBlock x:Name="GifEnabledCountText" FontSize="9.5" Foreground="#9AB6CE"
+                                                           HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <TextBlock Text="左键点击动态图启用；再次点击取消。右键可预览原图，最多同时启用 5 个。"
+                                                       FontSize="9" Foreground="#6F8CA6" TextWrapping="Wrap"
+                                                       Margin="0,3,0,8"/>
+                                            <WrapPanel x:Name="GifWallPanel"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <TabItem Header="成就墙" Style="{StaticResource PanelTab}">
+                            <Grid>
+                                <TabControl x:Name="AchievementTabs" Style="{StaticResource PanelTabs}"/>
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
+                </Grid>
+            </ScrollViewer>
+
+            <Grid Grid.Row="2">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="FooterNoticeText" FontSize="10" Foreground="#8FD3FF"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock x:Name="FooterVersionText" Text="鲸鱼娘 V1.1.0" FontSize="9.5"
+                               Foreground="#5E7F9C" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button Style="{StaticResource Action}" Content="关闭" Click="OnCloseClick"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

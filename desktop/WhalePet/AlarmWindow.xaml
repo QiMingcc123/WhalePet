@@ -57,11 +57,6 @@
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#358FD3FF"/>
-                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#8FD3FF"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
-                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="ButtonSurface" Property="Background" Value="#5A8FD3FF"/>
                                 <Setter Property="Foreground" Value="#FFFFFF"/>

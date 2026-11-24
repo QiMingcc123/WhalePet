@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using WhalePet.Game;
 
 namespace WhalePet;
 
@@ -51,6 +52,7 @@ public partial class MainWindow : Window
     private bool _adjustingPosition;
     private bool _loaded;
     private bool _closing;
+    public bool SuppressSaveOnShutdown { get; set; }
     private GlobalInputHook? _inputHook;
     private DateTime _typingUntil;
     private DateTime _pointerUntil;
@@ -75,6 +77,25 @@ public partial class MainWindow : Window
     private bool _screenshotHotkeyRegistered;
     private ScreenshotOverlayWindow? _screenshotOverlay;
     private const int ScreenshotHotkeyId = 0x5151;
+    private const int AvatarHotkeyId = 0x5152;
+    private const int PanelHotkeyId = 0x5153;
+    private const int ReadingShowHotkeyId = 0x5160;
+    private const int ReadingPrevHotkeyId = 0x5161;
+    private const int ReadingNextHotkeyId = 0x5162;
+    private bool _avatarHotkeyRegistered;
+    private bool _panelHotkeyRegistered;
+    private bool _readingShowRegistered;
+    private bool _readingPrevRegistered;
+    private bool _readingNextRegistered;
+    private CharacterPanelWindow? _characterPanel;
+    private AvatarSwitchWindow? _avatarSwitch;
+    private ReadingWindow? _readingWindow;
+    private OrganizerWindow? _organizerWindow;
+    private TodoWindow? _todoWindow;
+    private FishingWindow? _fishingWindow;
+    private CookingWindow? _cookingWindow;
+    private string? _temporaryAvatarGif;
+    private string _gameAvatarKey = "";
     private bool _deviceInfoBusy;
     private EdgeSide _edgeSide = EdgeSide.None;
     private Rect _expandedBounds;
@@ -92,12 +113,19 @@ public partial class MainWindow : Window
         Bottom,
     }
 
+    /// <summary>Global key events used by the fishing/cooking overlays.</summary>
+    public event Action<int>? GameKeyPressed;
+
     public MainWindow()
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
         _settings = SettingsStore.Load();
         _settings.Normalize();
+        // Persist the recovered/merged document into the stable user location.
+        // This also makes a configuration that was read from a legacy folder
+        // survive the next in-place update.
+        SettingsStore.Save(_settings);
         _nextWaterReminder = DateTime.Now.AddMinutes(_settings.WaterReminderMinutes);
         _nextSedentary = DateTime.Now.AddMinutes(_settings.SedentaryMinutes > 0 ? _settings.SedentaryMinutes : 45);
         _clipboardEntries.AddRange(ClipboardStore.Load());
@@ -131,6 +159,11 @@ public partial class MainWindow : Window
         _statusMarqueeTimer.Start();
         _edgeLeaveTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(420) };
         _edgeLeaveTimer.Tick += OnEdgeLeaveTimer;
+        if (GameRuntime.Engine is { } engine)
+        {
+            engine.Toast += OnGameToast;
+            engine.AvatarChanged += OnGameAvatarChanged;
+        }
         ApplySettingsToUi();
         UpdateStatusText();
     }
@@ -142,6 +175,7 @@ public partial class MainWindow : Window
         UpdateMemoCount();
         _inputHook = new GlobalInputHook();
         _inputHook.KeyboardPressed += OnGlobalKeyboard;
+        _inputHook.KeyPressed += OnGlobalKeyPressed;
         _inputHook.PointerMoved += OnGlobalPointerMoved;
         _inputHook.PointerPressed += OnGlobalPointerPressed;
         UpdateLayout();
@@ -151,6 +185,9 @@ public partial class MainWindow : Window
         PositionStatusActions();
         ShowGreeting();
         UpdateStatusText();
+        if (GameRuntime.GifError is not null) ShowSpeech("资源完整性异常：" + GameRuntime.GifError);
+        else if (GameRuntime.Engine?.State.TimeRollbackDetected == true)
+            ShowSpeech(GameRuntime.Engine.State.TimeRollbackNotice);
         UpdateWorkState();
         UpdateRemovableDevices();
         UpdateStatusActions();
@@ -167,6 +204,9 @@ public partial class MainWindow : Window
         _hwndSource?.AddHook(WndProc);
         Native.ListenForClipboard(_hwnd);
         RegisterScreenshotHotkey();
+        RegisterAvatarHotkey();
+        RegisterPanelHotkey();
+        RegisterReadingHotkeys();
     }
 
     private void RegisterScreenshotHotkey()
@@ -196,12 +236,121 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RegisterAvatarHotkey()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        if (_avatarHotkeyRegistered)
+        {
+            HotkeyManager.Unregister(_hwnd, AvatarHotkeyId);
+            _avatarHotkeyRegistered = false;
+        }
+        if (!_settings.ShowCharacterPanel) return;
+        if (HotkeyManager.Register(_hwnd, AvatarHotkeyId,
+                HotkeyManager.ModControl | HotkeyManager.ModAlt, (uint)'G'))
+        {
+            _avatarHotkeyRegistered = true;
+        }
+    }
+
+    private void RegisterPanelHotkey()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        if (_panelHotkeyRegistered)
+        {
+            HotkeyManager.Unregister(_hwnd, PanelHotkeyId);
+            _panelHotkeyRegistered = false;
+        }
+        var key = HotkeyManager.VirtualKey(_settings.PanelHotkeyKey);
+        if (key == 0) return;
+        var modifiers = HotkeyManager.Modifiers(
+            _settings.PanelHotkeyCtrl,
+            _settings.PanelHotkeyAlt,
+            _settings.PanelHotkeyShift,
+            _settings.PanelHotkeyWin);
+        if (modifiers == 0) return;
+        if (HotkeyManager.Register(_hwnd, PanelHotkeyId, modifiers, key))
+        {
+            _panelHotkeyRegistered = true;
+        }
+    }
+
+    private void RegisterReadingHotkeys()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        if (_readingShowRegistered) HotkeyManager.Unregister(_hwnd, ReadingShowHotkeyId);
+        if (_readingPrevRegistered) HotkeyManager.Unregister(_hwnd, ReadingPrevHotkeyId);
+        if (_readingNextRegistered) HotkeyManager.Unregister(_hwnd, ReadingNextHotkeyId);
+        _readingShowRegistered = false;
+        _readingPrevRegistered = false;
+        _readingNextRegistered = false;
+        if (!_settings.ReadingEnabled) return;
+
+        var panelModifiers = HotkeyManager.Modifiers(
+            _settings.PanelHotkeyCtrl,
+            _settings.PanelHotkeyAlt,
+            _settings.PanelHotkeyShift,
+            _settings.PanelHotkeyWin);
+        var panelKey = HotkeyManager.VirtualKey(_settings.PanelHotkeyKey);
+
+        bool RegisterOne(string text, int id, out bool flag, bool requireModifiers = false)
+        {
+            flag = false;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (!HotkeyGesture.TryParse(text, out var gesture)) return false;
+            if (requireModifiers && gesture.Modifiers == 0) return false;
+            if (panelModifiers == gesture.Modifiers && panelKey == gesture.VirtualKey)
+            {
+                ShowSpeech("阅读区域快捷键与角色面板快捷键冲突，请重新设置。");
+                return false;
+            }
+            flag = HotkeyManager.Register(_hwnd, id, gesture.Modifiers, gesture.VirtualKey);
+            return flag;
+        }
+
+        RegisterOne(_settings.ReadingShowHotkey, ReadingShowHotkeyId, out _readingShowRegistered);
+        RegisterOne(_settings.ReadingPrevHotkey, ReadingPrevHotkeyId, out _readingPrevRegistered, true);
+        RegisterOne(_settings.ReadingNextHotkey, ReadingNextHotkeyId, out _readingNextRegistered, true);
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == ScreenshotHotkeyId)
         {
             handled = true;
             StartScreenshot();
+        }
+        else if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == AvatarHotkeyId)
+        {
+            handled = true;
+            OpenAvatarSwitch();
+        }
+        else if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == PanelHotkeyId)
+        {
+            handled = true;
+            ToggleCharacterPanel();
+        }
+        else if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == ReadingShowHotkeyId)
+        {
+            handled = true;
+            ToggleReadingWindow();
+        }
+        else if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == ReadingPrevHotkeyId)
+        {
+            handled = true;
+            if (_fishingWindow is not { IsVisible: true } && _cookingWindow is not { IsVisible: true } &&
+                _readingWindow is { IsVisible: true } reader)
+            {
+                reader.PreviousPage();
+            }
+        }
+        else if (msg == HotkeyManager.WmHotkey && wParam.ToInt32() == ReadingNextHotkeyId)
+        {
+            handled = true;
+            if (_fishingWindow is not { IsVisible: true } && _cookingWindow is not { IsVisible: true } &&
+                _readingWindow is { IsVisible: true } reader)
+            {
+                reader.NextPage();
+            }
         }
         else if (msg == 0x031D) // WM_CLIPBOARDUPDATE
         {
@@ -243,6 +392,17 @@ public partial class MainWindow : Window
     private void OnGlobalKeyboard()
     {
         _typingUntil = DateTime.Now.AddMilliseconds(1200);
+    }
+
+    private void OnGlobalKeyPressed(int virtualKey)
+    {
+        if (_closing) return;
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => OnGlobalKeyPressed(virtualKey)));
+            return;
+        }
+        GameKeyPressed?.Invoke(virtualKey);
     }
 
     private void OnGlobalPointerMoved(int x, int y)
@@ -336,6 +496,7 @@ public partial class MainWindow : Window
 
     private void OnTick(object? sender, EventArgs e)
     {
+        try { GameRuntime.Engine?.Tick(); } catch { }
         var idle = Native.GetIdleTime();
         if (_state == PetState.Play)
         {
@@ -809,6 +970,25 @@ public partial class MainWindow : Window
     {
         if (!force && _state == state) return;
         _state = state;
+        if (ApplyGameAvatar())
+        {
+            StatusDot.Fill = state == PetState.Idle
+                ? new SolidColorBrush(Color.FromRgb(124, 147, 170))
+                : new SolidColorBrush(Color.FromRgb(88, 224, 180));
+            UpdateStatusText();
+            return;
+        }
+
+        if (state == PetState.Main &&
+            GameRuntime.Engine?.EffectiveAvatar().Kind == AvatarKind.DefaultStatic)
+        {
+            var builtInPath = AssetBootstrapper.PathOf("main.png");
+            if (File.Exists(builtInPath)) ShowImage(builtInPath);
+            StatusDot.Fill = new SolidColorBrush(Color.FromRgb(88, 224, 180));
+            UpdateStatusText();
+            return;
+        }
+
         var list = state == PetState.Idle
             ? _settings.IdleImages
             : state == PetState.Play
@@ -1134,6 +1314,7 @@ public partial class MainWindow : Window
 
     private void Interact()
     {
+        try { GameRuntime.Engine?.Interact(); } catch { }
         _lastInteraction = DateTime.Now;
         _playUntil = DateTime.Now.AddSeconds(_settings.PlaySeconds);
         SetState(PetState.Play, true);
@@ -1219,7 +1400,10 @@ public partial class MainWindow : Window
             ? ""
             : $" · {_weatherInfo.Icon} {Math.Round(_weatherInfo.Temperature)}°C";
         var memoPart = _memoCount > 0 ? $" · 📝 {_memoCount}" : "";
-        SummaryText.Text = $"鲸鱼娘 · {DateTime.Now:HH:mm}{weatherPart} · {stateLabel}{memoPart}";
+        var gamePart = GameRuntime.Engine is { } game
+            ? $" · Lv.{game.State.Level} ♥{game.State.Affection}"
+            : "";
+        SummaryText.Text = $"鲸鱼娘 · {DateTime.Now:HH:mm}{weatherPart} · {stateLabel}{memoPart}{gamePart}";
 
         ClockText.Text = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} · 本机时间";
         StateText.Text = $"形象状态：{stateLabel} · 主形象 {_settings.MainImages.Count} 张 / 空闲 {_settings.IdleImages.Count} 张 / 互动 {_settings.PlayImages.Count} 张";
@@ -1263,23 +1447,492 @@ public partial class MainWindow : Window
         }));
     }
 
+    private void OnGameToast(string message)
+    {
+        if (_closing) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!_closing && !string.IsNullOrWhiteSpace(message)) ShowSpeech(message);
+        }));
+    }
+
+    private void OnGameAvatarChanged()
+    {
+        _gameAvatarKey = "";
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (_closing) return;
+            if (!ApplyGameAvatar()) SetState(_state, true);
+        }));
+    }
+
+    /// <summary>
+    /// Shows a GIF/custom avatar when the game state provides one. Returns false
+    /// when the built-in static image should be used instead.
+    /// </summary>
+    private bool ApplyGameAvatar()
+    {
+        if (GameRuntime.Engine is not { } engine) return false;
+
+        if (_temporaryAvatarGif is not null)
+        {
+            var tempKey = "temp|" + _temporaryAvatarGif;
+            if (tempKey == _gameAvatarKey && AvatarGif.Visibility == Visibility.Visible) return true;
+            try
+            {
+                var stream = GameRuntime.Gifs?.GetAssetStream(_temporaryAvatarGif);
+                if (stream is not null)
+                {
+                    AvatarGif.SetStream(stream);
+                    AvatarGif.Visibility = Visibility.Visible;
+                    FrontImage.Visibility = Visibility.Collapsed;
+                    _gameAvatarKey = tempKey;
+                    return true;
+                }
+            }
+            catch (Exception error)
+            {
+                ShowSpeech("小游戏形象加载失败：" + error.Message);
+            }
+            _temporaryAvatarGif = null;
+            _gameAvatarKey = "";
+        }
+
+        var avatar = engine.EffectiveAvatar();
+        if (avatar.Kind == AvatarKind.DefaultStatic)
+        {
+            if (AvatarGif.Visibility == Visibility.Visible)
+            {
+                AvatarGif.Clear();
+                AvatarGif.Visibility = Visibility.Collapsed;
+            }
+            FrontImage.Visibility = Visibility.Visible;
+            _gameAvatarKey = "";
+            return false;
+        }
+
+        var key = avatar.Kind + "|" + avatar.GifId + "|" + avatar.CustomPath;
+        if (key == _gameAvatarKey && AvatarGif.Visibility == Visibility.Visible) return true;
+
+        if (avatar.Kind == AvatarKind.Gif)
+        {
+            try
+            {
+                var stream = GameRuntime.Gifs?.GetDecryptedStream(avatar.GifId ?? "");
+                if (stream is null) return false;
+                AvatarGif.SetStream(stream);
+                AvatarGif.Visibility = Visibility.Visible;
+                FrontImage.Visibility = Visibility.Collapsed;
+                _gameAvatarKey = key;
+                return true;
+            }
+            catch (Exception error)
+            {
+                ShowSpeech("动态图加载失败：" + error.Message);
+                AvatarGif.Clear();
+                AvatarGif.Visibility = Visibility.Collapsed;
+                FrontImage.Visibility = Visibility.Visible;
+                return false;
+            }
+        }
+
+        if (avatar.Kind == AvatarKind.CustomImage && File.Exists(avatar.CustomPath))
+        {
+            try
+            {
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bitmap.DecodePixelWidth = 640;
+                bitmap.UriSource = new Uri(avatar.CustomPath!, UriKind.Absolute);
+                bitmap.EndInit();
+                bitmap.Freeze();
+                AvatarGif.Clear();
+                AvatarGif.Visibility = Visibility.Collapsed;
+                FrontImage.Source = bitmap;
+                FrontImage.Opacity = 1;
+                FrontImage.Visibility = Visibility.Visible;
+                _currentImage = avatar.CustomPath!;
+                _gameAvatarKey = key;
+                return true;
+            }
+            catch
+            {
+                AvatarGif.Clear();
+                AvatarGif.Visibility = Visibility.Collapsed;
+                FrontImage.Visibility = Visibility.Visible;
+                return false;
+            }
+        }
+
+        AvatarGif.Clear();
+        AvatarGif.Visibility = Visibility.Collapsed;
+        FrontImage.Visibility = Visibility.Visible;
+        return false;
+    }
+
+    /// <summary>Switches the pet to a temporary game animation, then restores it.</summary>
+    public void SetTemporaryAvatar(string gifId)
+    {
+        _temporaryAvatarGif = gifId;
+        _gameAvatarKey = "";
+        ApplyGameAvatar();
+    }
+
+    public void RestoreTemporaryAvatar()
+    {
+        if (_temporaryAvatarGif is null) return;
+        _temporaryAvatarGif = null;
+        _gameAvatarKey = "";
+        if (!ApplyGameAvatar()) SetState(_state, true);
+    }
+
+    public void ShowGameMessage(string message)
+    {
+        if (!_closing && !string.IsNullOrWhiteSpace(message)) ShowSpeech(message);
+    }
+
+    /// <summary>Client coordinates of the character host, used to anchor overlays.</summary>
+    public Rect CharacterBoundsInWindow()
+    {
+        var origin = CharacterHost.TransformToAncestor(this).Transform(new Point(0, 0));
+        var far = CharacterHost.TransformToAncestor(this).Transform(
+            new Point(CharacterHost.ActualWidth, CharacterHost.ActualHeight));
+        return new Rect(origin, new Size(Math.Max(1, far.X - origin.X), Math.Max(1, far.Y - origin.Y)));
+    }
+
+    private void OnCharacterPanelClick(object sender, RoutedEventArgs e) => OpenCharacterPanel();
+
+    private void OnAvatarSwitchClick(object sender, RoutedEventArgs e) => OpenAvatarSwitch();
+
+    private void ToggleCharacterPanel()
+    {
+        if (GameRuntime.Engine is null) return;
+        if (_characterPanel is { } existing)
+        {
+            if (existing.IsVisible) existing.Hide();
+            else
+            {
+                existing.Show();
+                existing.Activate();
+            }
+            return;
+        }
+        OpenCharacterPanel(force: true);
+    }
+
+    private void ToggleReadingWindow()
+    {
+        if (!_settings.ReadingEnabled) return;
+        if (_readingWindow is { IsVisible: true } existing)
+        {
+            existing.Hide();
+            return;
+        }
+        OpenReadingWindow();
+    }
+
+    private void OpenReadingWindow()
+    {
+        if (!_settings.ReadingEnabled) return;
+        if (_readingWindow is { } existing)
+        {
+            existing.Show();
+            existing.Activate();
+            existing.Focus();
+            existing.ApplySettings(_settings);
+            return;
+        }
+        var window = new ReadingWindow(_settings);
+        _readingWindow = window;
+        window.SettingsChanged += settings =>
+        {
+            _settings.ReadingLeft = settings.ReadingLeft;
+            _settings.ReadingTop = settings.ReadingTop;
+            _settings.ReadingWidth = settings.ReadingWidth;
+            _settings.ReadingHeight = settings.ReadingHeight;
+            _settings.ReadingPageIndex = settings.ReadingPageIndex;
+            SettingsStore.Save(_settings);
+        };
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_readingWindow, window)) _readingWindow = null;
+        };
+        window.Show();
+        window.Activate();
+    }
+
+    private void OpenCharacterPanel(bool force = false)
+    {
+        if (!_settings.ShowCharacterPanel && !force) return;
+        if (GameRuntime.Engine is null)
+        {
+            MessageBox.Show("角色面板数据未能初始化：" + (GameRuntime.Error ?? "未知错误"), "鲸鱼娘",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (_characterPanel is { } existing)
+        {
+            if (!existing.IsVisible) existing.Show();
+            existing.Activate();
+            return;
+        }
+
+        var panel = new CharacterPanelWindow(_settings) { Owner = this };
+        _characterPanel = panel;
+        panel.PositionChanged += (left, top) =>
+        {
+            if (Math.Abs((_settings.PanelLeft ?? double.NaN) - left) < 0.5 &&
+                Math.Abs((_settings.PanelTop ?? double.NaN) - top) < 0.5)
+            {
+                return;
+            }
+            _settings.PanelLeft = left;
+            _settings.PanelTop = top;
+            SettingsStore.Save(_settings);
+        };
+        panel.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_characterPanel, panel)) _characterPanel = null;
+        };
+        panel.Show();
+        panel.Activate();
+    }
+
+    private void OpenAvatarSwitch()
+    {
+        if (!_settings.ShowCharacterPanel) return;
+        if (GameRuntime.Engine is null) return;
+        if (_avatarSwitch is { IsVisible: true } existing)
+        {
+            existing.Activate();
+            return;
+        }
+        var window = new AvatarSwitchWindow(GameRuntime.Engine) { Owner = this };
+        _avatarSwitch = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_avatarSwitch, window)) _avatarSwitch = null;
+            _gameAvatarKey = "";
+            if (!ApplyGameAvatar()) SetState(_state, true);
+        };
+        window.ShowDialog();
+    }
+
+    private void OnPetMenuOpened(object sender, RoutedEventArgs e) => UpdateMiniGameMenu();
+
+    private void UpdateMiniGameMenu()
+    {
+        if (GameRuntime.Engine is not { } engine)
+        {
+            FishingMenuItem.IsEnabled = false;
+            CookingMenuItem.IsEnabled = false;
+            return;
+        }
+        var fishing = engine.FishingRemaining;
+        var cooking = engine.CookingRemaining;
+        FishingMenuItem.Header = $"钓鱼（剩余 {fishing}/5 次）";
+        CookingMenuItem.Header = $"烹饪（剩余 {cooking}/3 次，需食材 ≥1）";
+        FishingMenuItem.IsEnabled = fishing > 0;
+        CookingMenuItem.IsEnabled = cooking > 0;
+    }
+
+    private void OnFishingMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (GameRuntime.Engine is not { } engine) return;
+        if (engine.FishingRemaining <= 0) return;
+        if (_cookingWindow is { IsVisible: true })
+        {
+            ShowSpeech("请先结束正在进行的烹饪小游戏。");
+            return;
+        }
+        if (_fishingWindow is { IsVisible: true } existing)
+        {
+            existing.Activate();
+            return;
+        }
+        engine.MarkFishingEntered();
+        var window = new FishingWindow(engine, this, _settings) { Owner = this };
+        _fishingWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_fishingWindow, window)) _fishingWindow = null;
+        };
+        window.Show();
+    }
+
+    private void OnCookingMenuClick(object sender, RoutedEventArgs e)
+    {        if (GameRuntime.Engine is not { } engine) return;
+        if (engine.CookingRemaining <= 0) return;
+        if (_fishingWindow is { IsVisible: true })
+        {
+            ShowSpeech("请先结束正在进行的钓鱼小游戏。");
+            return;
+        }
+        if (engine.IngredientItemCount <= 0)
+        {
+            ShowSpeech("没有食材，先去钓鱼吧~");
+            return;
+        }
+        if (_cookingWindow is { IsVisible: true } existing)
+        {
+            existing.Activate();
+            return;
+        }
+        engine.MarkCookingEntered();
+        var window = new CookingWindow(engine, this, _settings) { Owner = this };
+        _cookingWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_cookingWindow, window)) _cookingWindow = null;
+        };
+        window.Show();
+    }
+
+    private void OnReadingMenuClick(object sender, RoutedEventArgs e) => ToggleReadingWindow();
+
+    private void OnOrganizerMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (!_settings.OrganizerEnabled) return;
+        if (_organizerWindow is { IsVisible: true } existing)
+        {
+            existing.Hide();
+            return;
+        }
+        if (_organizerWindow is null)
+        {
+            var window = new OrganizerWindow(_settings);
+            _organizerWindow = window;
+            window.SettingsChanged += settings =>
+            {
+                _settings.OrganizerWidth = settings.OrganizerWidth;
+                _settings.OrganizerHeight = settings.OrganizerHeight;
+                SettingsStore.Save(_settings);
+            };
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_organizerWindow, window)) _organizerWindow = null;
+            };
+        }
+        _organizerWindow.Show();
+        _organizerWindow.Activate();
+        _organizerWindow.ApplySettings(_settings);
+    }
+
+    private void OnTodoMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (!_settings.TodoEnabled) return;
+        if (_todoWindow is { IsVisible: true } existing)
+        {
+            existing.Hide();
+            return;
+        }
+        if (_todoWindow is null)
+        {
+            var window = new TodoWindow(_settings);
+            _todoWindow = window;
+            window.SettingsChanged += settings =>
+            {
+                _settings.TodoWidth = settings.TodoWidth;
+                _settings.TodoHeight = settings.TodoHeight;
+                SettingsStore.Save(_settings);
+            };
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_todoWindow, window)) _todoWindow = null;
+            };
+        }
+        _todoWindow.Show();
+        _todoWindow.Activate();
+        _todoWindow.ApplySettings(_settings);
+    }
+
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         _suppressEdgeCollapse = true;
+        var beforeFishingScale = _settings.FishingOverlayScale;
+        var beforeCookingScale = _settings.CookingOverlayScale;
+        var beforeMiniOpacity = _settings.MiniGameOpacity;
         var dialog = new SettingsWindow(_settings.Clone()) { Owner = this };
+        void Preview(PetSettings preview) =>
+            ApplyMiniGameDisplay(preview.FishingOverlayScale, preview.CookingOverlayScale, preview.MiniGameOpacity);
+        void ReadingPreview(PetSettings preview) => ApplyReadingPreview(preview);
+        void Saved(PetSettings saved) => ApplySavedSettings(saved);
+        (double? Left, double? Top) ResetReading() => ResetReadingPosition();
+        dialog.PreviewChanged += Preview;
+        dialog.ReadingPreviewChanged += ReadingPreview;
+        dialog.SettingsSaved += Saved;
+        dialog.ResetReadingPositionRequested += ResetReading;
         var accepted = false;
         try { accepted = dialog.ShowDialog() == true; }
-        finally { _suppressEdgeCollapse = false; }
-        if (!accepted) return;
-        _settings = dialog.Settings;
+        finally
+        {
+            dialog.PreviewChanged -= Preview;
+            dialog.ReadingPreviewChanged -= ReadingPreview;
+            dialog.SettingsSaved -= Saved;
+            dialog.ResetReadingPositionRequested -= ResetReading;
+            _suppressEdgeCollapse = false;
+        }
+        if (dialog.SettingsImported) return;
+        if (dialog.HasSavedSettings) return;
+        if (!accepted)
+        {
+            ApplyMiniGameDisplay(beforeFishingScale, beforeCookingScale, beforeMiniOpacity);
+            return;
+        }
+        ApplySavedSettings(dialog.Settings);
+    }
+
+    private (double? Left, double? Top) ResetReadingPosition()
+    {
+        if (_readingWindow is { } reader)
+        {
+            var (left, top) = reader.ResetToPrimaryWorkArea();
+            _settings.ReadingLeft = left;
+            _settings.ReadingTop = top;
+            SettingsStore.Save(_settings);
+            return (left, top);
+        }
+        _settings.ReadingLeft = null;
+        _settings.ReadingTop = null;
+        SettingsStore.Save(_settings);
+        return (null, null);
+    }
+
+    private void ApplySavedSettings(PetSettings saved)
+    {
+        var currentPanelLeft = _settings.PanelLeft;
+        var currentPanelTop = _settings.PanelTop;
+        _settings = saved.Clone();
+        _settings.PanelLeft = currentPanelLeft;
+        _settings.PanelTop = currentPanelTop;
         SettingsStore.Save(_settings);
         ApplySettingsToUi();
+        ApplyMiniGameDisplay(_settings.FishingOverlayScale, _settings.CookingOverlayScale,
+            _settings.MiniGameOpacity);
         _lastWeatherFetch = DateTime.MinValue;
         SetState(PetState.Main, true);
         _nextWaterReminder = DateTime.Now.AddMinutes(_settings.WaterReminderMinutes);
         _nextSedentary = DateTime.Now.AddMinutes(Math.Max(1, _settings.SedentaryMinutes));
         _alarmFiredDates.Clear();
         ShowSpeech("设置已保存。");
+        UpdateStatusText();
+        _ = RefreshWeatherAfterSettingsAsync();
+    }
+
+    public void ReloadSettingsFromDisk()
+    {
+        _settings = SettingsStore.Load();
+        try { AutoStartService.SetEnabled(_settings.StartWithWindows, out _); } catch { }
+        ApplySettingsToUi();
+        ApplyMiniGameDisplay(_settings.FishingOverlayScale, _settings.CookingOverlayScale,
+            _settings.MiniGameOpacity);
+        _lastWeatherFetch = DateTime.MinValue;
+        SetState(PetState.Main, true);
+        _nextWaterReminder = DateTime.Now.AddMinutes(_settings.WaterReminderMinutes);
+        _nextSedentary = DateTime.Now.AddMinutes(Math.Max(1, _settings.SedentaryMinutes));
+        _alarmFiredDates.Clear();
         UpdateStatusText();
         _ = RefreshWeatherAfterSettingsAsync();
     }
@@ -1447,6 +2100,38 @@ public partial class MainWindow : Window
 
     private void OnExitClick(object sender, RoutedEventArgs e) => Close();
 
+    private void ApplyMiniGameDisplay(double fishingScale, double cookingScale, double opacity)
+    {
+        _fishingWindow?.ApplyDisplaySettings(fishingScale, opacity);
+        _cookingWindow?.ApplyDisplaySettings(cookingScale, opacity);
+    }
+
+    private void ApplyReadingPreview(PetSettings preview)
+    {
+        _settings.ReadingEnabled = preview.ReadingEnabled;
+        _settings.ReadingTextPath = preview.ReadingTextPath;
+        _settings.ReadingWidth = preview.ReadingWidth;
+        _settings.ReadingHeight = preview.ReadingHeight;
+        _settings.ReadingBackground = preview.ReadingBackground;
+        _settings.ReadingBackgroundOpacity = preview.ReadingBackgroundOpacity;
+        _settings.ReadingFontSize = preview.ReadingFontSize;
+        _settings.ReadingTextColor = preview.ReadingTextColor;
+        _settings.ReadingTextOpacity = preview.ReadingTextOpacity;
+        _settings.ReadingFontFamily = preview.ReadingFontFamily;
+        _settings.ReadingLineHeight = preview.ReadingLineHeight;
+        _settings.ReadingCharsPerPage = preview.ReadingCharsPerPage;
+        _settings.ReadingEncoding = preview.ReadingEncoding;
+        _settings.ReadingPageIndex = preview.ReadingPageIndex;
+        _settings.ReadingShowHotkey = preview.ReadingShowHotkey;
+        _settings.ReadingPrevHotkey = preview.ReadingPrevHotkey;
+        _settings.ReadingNextHotkey = preview.ReadingNextHotkey;
+        SettingsStore.Save(_settings);
+        RegisterReadingHotkeys();
+        if (_settings.ReadingEnabled) _readingWindow?.ApplySettings(_settings);
+        else _readingWindow?.Hide();
+        ReadingMenuItem.Visibility = Visibility.Collapsed;
+    }
+
     private void ApplySettingsToUi()
     {
         _settings.Normalize();
@@ -1479,8 +2164,30 @@ public partial class MainWindow : Window
         LockMenuItem.Visibility = LockScreenButton.Visibility;
         AlarmMenuItem.Visibility = AlarmButton.Visibility;
         ScreenshotMenuItem.Visibility = ScreenshotButton.Visibility;
+        CharacterPanelMenuItem.Visibility = _settings.ShowCharacterPanel ? Visibility.Visible : Visibility.Collapsed;
+        AvatarSwitchMenuItem.Visibility = _settings.ShowCharacterPanel ? Visibility.Visible : Visibility.Collapsed;
+        ReadingMenuItem.Visibility = Visibility.Collapsed;
+        OrganizerMenuItem.Visibility = _settings.OrganizerEnabled ? Visibility.Visible : Visibility.Collapsed;
+        TodoMenuItem.Visibility = _settings.TodoEnabled ? Visibility.Visible : Visibility.Collapsed;
+        if (!_settings.OrganizerEnabled) _organizerWindow?.Close();
+        else _organizerWindow?.ApplySettings(_settings);
+        if (!_settings.TodoEnabled) _todoWindow?.Close();
+        else _todoWindow?.ApplySettings(_settings);
+        if (!_settings.ShowCharacterPanel && _characterPanel is not null)
+        {
+            _characterPanel.Close();
+            _characterPanel = null;
+        }
+        _characterPanel?.ApplyDisplaySettings(_settings);
+        ApplyMiniGameDisplay(_settings.FishingOverlayScale, _settings.CookingOverlayScale, _settings.MiniGameOpacity);
+        if (!_settings.ReadingEnabled) _readingWindow?.Hide();
+        else _readingWindow?.ApplySettings(_settings);
+        UpdateMiniGameMenu();
         ClipboardHistoryButton.ToolTip = $"剪贴板历史（{_clipboardEntries.Count} 条）";
         RegisterScreenshotHotkey();
+        RegisterAvatarHotkey();
+        RegisterPanelHotkey();
+        RegisterReadingHotkeys();
     }
 
     private void ApplyAppearance()
@@ -1687,6 +2394,7 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (!SuppressSaveOnShutdown) SaveWindowPosition();
         _closing = true;
         _timer.Stop();
         _inputTimer.Stop();
@@ -1701,12 +2409,36 @@ public partial class MainWindow : Window
         _reminderPopupWindow?.Close();
         _reminderPopupWindow = null;
         _inputHook?.Dispose();
+        if (_inputHook is not null) _inputHook.KeyPressed -= OnGlobalKeyPressed;
         ClipboardStore.Changed -= OnClipboardStoreChanged;
         Native.StopListeningForClipboard(_hwnd);
         HotkeyManager.Unregister(_hwnd, ScreenshotHotkeyId);
+        HotkeyManager.Unregister(_hwnd, AvatarHotkeyId);
+        HotkeyManager.Unregister(_hwnd, PanelHotkeyId);
+        HotkeyManager.Unregister(_hwnd, ReadingShowHotkeyId);
+        HotkeyManager.Unregister(_hwnd, ReadingPrevHotkeyId);
+        HotkeyManager.Unregister(_hwnd, ReadingNextHotkeyId);
+        _fishingWindow?.ForceClose();
+        _fishingWindow = null;
+        _cookingWindow?.ForceClose();
+        _cookingWindow = null;
+        _characterPanel?.Close();
+        _characterPanel = null;
+        _readingWindow?.Close();
+        _readingWindow = null;
+        _organizerWindow?.Close();
+        _organizerWindow = null;
+        _todoWindow?.Close();
+        _todoWindow = null;
+        _avatarSwitch?.Close();
+        _avatarSwitch = null;
+        if (GameRuntime.Engine is { } engine)
+        {
+            engine.Toast -= OnGameToast;
+            engine.AvatarChanged -= OnGameAvatarChanged;
+        }
         _hwndSource?.RemoveHook(WndProc);
         _weatherCts?.Cancel();
         _weatherCts?.Dispose();
-        SaveWindowPosition();
     }
 }

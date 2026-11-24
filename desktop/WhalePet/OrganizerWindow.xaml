@@ -1,0 +1,103 @@
+<Window x:Class="WhalePet.OrganizerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="桌面图标收纳区"
+        Width="620"
+        Height="560"
+        MinWidth="300"
+        MinHeight="300"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowDrop="True"
+        WindowStartupLocation="Manual"
+        FontFamily="Microsoft YaHei UI"
+        Loaded="OnLoaded"
+        SourceInitialized="OnSourceInitialized"
+        Closed="OnClosed"
+        LocationChanged="OnBoundsChanged"
+        SizeChanged="OnBoundsChanged"
+        Closing="OnClosing"
+        DragOver="OnDragOver"
+        Drop="OnDrop">
+    <Window.Resources>
+        <Style x:Key="OrganizerCombo" TargetType="ComboBox" BasedOn="{StaticResource PetComboBox}">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+    </Window.Resources>
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Border x:Name="RootBorder" CornerRadius="12" BorderBrush="#558FD3FF" BorderThickness="1">
+        <Grid Margin="12,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDrag">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="#2E8FD3FF" CornerRadius="8" Padding="7,1">
+                        <TextBlock Text="收" FontSize="13" FontWeight="Bold" Foreground="#8FD3FF"/>
+                    </Border>
+                    <TextBlock Text="桌面图标收纳区" FontSize="15" FontWeight="Bold" Foreground="#F3FAFF"
+                               Margin="8,0,0,0"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="+ 分类" Height="26" Margin="0,0,6,0" Padding="8,0"
+                            Background="#1F8FD3FF" Foreground="#DFF2FF" BorderBrush="#5A8FD3FF"
+                            BorderThickness="1" Click="OnAddCategoryClick"/>
+                    <Button Content="+ 添加软件" Height="26" Margin="0,0,6,0" Padding="8,0"
+                            Background="#4D6BFE" Foreground="#FFFFFF" BorderBrush="#7E93FF"
+                            BorderThickness="1" Click="OnAddFilesClick"/>
+                    <Button Content="×" Width="26" Height="26" Padding="0" FontSize="13"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                            Background="#33FF6B6B"
+                            Foreground="#FFE1E1" BorderBrush="#88FF8A8A" BorderThickness="1"
+                            Click="OnCloseClick"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="0,8,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled">
+                    <WrapPanel x:Name="CategoryBar"/>
+                </ScrollViewer>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                    <Button Content="删除选中" Height="26" Padding="8,0" Margin="0,0,5,0"
+                            Background="#33FF6B6B" Foreground="#FFE1E1" BorderBrush="#88FF8A8A"
+                            BorderThickness="1" Click="OnDeleteSelectedClick"/>
+                    <ComboBox x:Name="MoveCategoryBox" Width="100" Height="26" Margin="0,0,5,0"
+                              Style="{StaticResource OrganizerCombo}"/>
+                    <Button Content="移动" Height="26" Padding="8,0"
+                            Background="#1F8FD3FF" Foreground="#DFF2FF" BorderBrush="#5A8FD3FF"
+                            BorderThickness="1" Click="OnMoveSelectedClick"/>
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <WrapPanel x:Name="ItemPanel"/>
+            </ScrollViewer>
+
+            <Grid Grid.Row="3" Margin="0,6,0,0">
+                <TextBlock x:Name="CountText" Foreground="#7FA5C5" FontSize="9" VerticalAlignment="Center"/>
+                <TextBlock Text="双击启动 · 拖动排序/分类 · 从桌面拖入添加 · 拖出移除"
+                           Foreground="#5E7F9C" FontSize="9" HorizontalAlignment="Right"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
