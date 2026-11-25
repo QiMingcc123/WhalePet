@@ -252,6 +252,8 @@ Web 插件是普通静态 bundle，无需构建。
 
 桌面版：
 
+> `desktop/WhalePet/Assets/gifs.enc` 约 75 MB，使用 Git LFS 存储。克隆仓库前请安装 Git LFS 并执行 `git lfs install`，再 `git clone` / `git lfs pull`；否则该文件只会得到 LFS 指针，桌面版构建会缺少动态图资源。
+
 ```powershell
 # 仅在 gifs/ 资源变化时需要重新打包；主密钥不写入 GifPacker 源码
 dotnet run --project tools\GifPacker\GifPacker.csproj -c Release -- `
