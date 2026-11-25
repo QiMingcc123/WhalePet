@@ -39,8 +39,9 @@ public partial class ReadingWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _loaded = true;
-        ApplySettings(_settings);
+        ApplySettings(_settings, restorePosition: true);
         ReloadText();
+        PersistBounds();
         Activate();
         Focus();
         PanelPlacementHelper.BringToTop(this);
@@ -62,7 +63,7 @@ public partial class ReadingWindow : Window
         PanelPlacementHelper.AttachDisplayWatcher(this, PersistBounds, includeTaskbar: true);
     }
 
-    public void ApplySettings(PetSettings settings)
+    public void ApplySettings(PetSettings settings, bool restorePosition = false)
     {
         _applying = true;
         try
@@ -74,7 +75,7 @@ public partial class ReadingWindow : Window
             _settings = settings.Clone();
             Width = Math.Clamp(settings.ReadingWidth, 30, 1200);
             Height = Math.Clamp(settings.ReadingHeight, 30, 800);
-            if (_loaded)
+            if (_loaded && restorePosition)
             {
                 PanelPlacementHelper.RestorePosition(this, settings.ReadingLeft, settings.ReadingTop);
             }
@@ -213,11 +214,6 @@ public partial class ReadingWindow : Window
         PanelPlacementHelper.BringToTop(this);
         PersistBounds();
         return (Left, Top);
-    }
-
-    private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
-    {
-        OnDrag(sender, e);
     }
 
     private void OnDrag(object sender, MouseButtonEventArgs e)

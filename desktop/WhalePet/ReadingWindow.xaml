@@ -23,16 +23,15 @@
         LocationChanged="OnBoundsChanged"
         SizeChanged="OnBoundsChanged"
         KeyDown="OnKeyDown"
-        PreviewMouseLeftButtonDown="OnPreviewMouseDown"
         Closing="OnClosing"
         Closed="OnClosed">
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6"
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="14"
                             GlassFrameThickness="0" CornerRadius="0"
                             UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
 
-    <Border x:Name="RootBorder" CornerRadius="8" BorderBrush="#558FD3FF" BorderThickness="1">
+    <Border x:Name="RootBorder" CornerRadius="8" BorderBrush="Transparent" BorderThickness="0">
         <Grid Background="Transparent">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -51,6 +50,11 @@
                            VerticalAlignment="Top" FontFamily="Microsoft YaHei UI"
                            FontSize="14" Foreground="#EAF6FF" IsHitTestVisible="False"/>
             </Grid>
+
+            <!-- Full-surface drag layer: the entire panel, including text, is draggable. -->
+            <Border x:Name="DragSurface" Grid.Row="0" Grid.RowSpan="2"
+                    Background="Transparent" Cursor="SizeAll"
+                    MouseLeftButtonDown="OnDrag"/>
         </Grid>
     </Border>
 </Window>
