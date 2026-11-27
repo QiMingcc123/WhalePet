@@ -318,6 +318,52 @@ try
         "迁移包收集自定义主形象图片数据");
     File.Delete(imagePath);
 
+    // 阅读小说：迁移包保存压缩后的文件内容，导入时落到新设备本地路径，
+    // 不依赖旧设备的绝对路径。测试只读写临时目录。
+    var buildReadingDocument = typeof(MigrationService).GetMethod("BuildReadingDocument",
+        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    var restoreReadingDocument = typeof(MigrationService).GetMethod("RestoreReadingDocument",
+        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    var novelPath = Path.Combine(root, "novel-source.txt");
+    var novelBytes = Encoding.UTF8.GetBytes("第一章 深海\n这是一段用于迁移的小说正文。\r\n结尾。");
+    File.WriteAllBytes(novelPath, novelBytes);
+    var novelHashBefore = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        File.ReadAllBytes(novelPath)));
+    var novelSettings = new PetSettings { ReadingTextPath = novelPath };
+    var novelTransfer = buildReadingDocument?.Invoke(null, new object[] { novelSettings })
+        as ReadingDocumentTransfer;
+    Check(novelTransfer is { OriginalLength: > 0 } &&
+          novelTransfer.Data.Length > 0 &&
+          Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+              File.ReadAllBytes(novelPath))) == novelHashBefore,
+        "迁移包收集阅读小说内容且不修改源文件");
+    var restoredDir = Path.Combine(root, "novel-restored");
+    var restoredNovel = restoreReadingDocument?.Invoke(null,
+        new object?[] { novelTransfer, restoredDir }) as string;
+    Check(restoredNovel is not null && File.Exists(restoredNovel) &&
+          File.ReadAllBytes(restoredNovel).SequenceEqual(novelBytes) &&
+          restoredNovel != novelPath,
+        "迁移包将小说内容恢复到新路径并保持字节一致");
+    var restoredNovelSettings = new PetSettings { ReadingTextPath = restoredNovel! };
+    Check(ReadingService.Reload(restoredNovelSettings) &&
+          ReadingService.RawText.Contains("深海") &&
+          ReadingService.RawText.Contains("迁移的小说正文"),
+        "迁移后小说可被阅读区按原内容加载");
+    var novelPayload = new MigrationPayload { ReadingDocument = novelTransfer };
+    var novelJson = System.Text.Json.JsonSerializer.Serialize(novelPayload,
+        new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        });
+    var novelRoundTrip = System.Text.Json.JsonSerializer.Deserialize<MigrationPayload>(
+        novelJson, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        });
+    Check(novelRoundTrip?.ReadingDocument is { OriginalLength: > 0 } &&
+          novelRoundTrip.ReadingDocument.Data == novelTransfer!.Data,
+        "阅读小说内容可随迁移包序列化/反序列化");
+
     var mergeMissing = typeof(SettingsStore).GetMethod("MergeMissingFields",
         System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
     var mergedSettings = mergeMissing?.Invoke(null, new object[]

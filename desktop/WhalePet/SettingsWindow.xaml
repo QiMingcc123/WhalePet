@@ -493,7 +493,7 @@
                 <TextBlock x:Name="MigrationSectionTitle" Text="迁移数据" Style="{StaticResource Section}"/>
                 <TextBlock x:Name="MigrationStepsText" FontSize="9.5" Foreground="#9AB6CE"
                            TextWrapping="Wrap" Margin="0,2,0,6"
-                           Text="第一步：在旧电脑打开「设置 → 迁移数据 → 导出迁移包」，设置密码并保存 .whalepet 文件。&#10;第二步：在新电脑安装并启动鲸鱼娘。&#10;第三步：打开「设置 → 迁移数据 → 导入迁移包」，选择文件并输入密码。&#10;第四步：如果提示未激活，点击「迁移激活」，按窗口提示完成一次性激活。&#10;第五步：导入成功会覆盖当前用户数据，签到、任务与每日次数按新电脑时间重置。"/>
+                           Text="第一步：在旧电脑打开「设置 → 迁移数据 → 导出迁移包」，设置密码并保存 .whalepet 文件。&#10;第二步：在新电脑安装并启动鲸鱼娘。&#10;第三步：打开「设置 → 迁移数据 → 导入迁移包」，选择文件并输入密码。&#10;第四步：如果提示未激活，点击「迁移激活」，按窗口提示完成一次性激活。&#10;第五步：导入成功会覆盖当前用户数据，签到、任务与每日次数按新电脑时间重置。阅读区当前 txt 的内容会随包复制（单文件上限 64 MB），导入后不再依赖旧路径。"/>
                 <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
                     <Button Content="导出迁移包…" Style="{StaticResource Action}" Click="OnExportMigration"/>
                     <Button Content="导入迁移包…" Style="{StaticResource Action}" Click="OnImportMigration"/>

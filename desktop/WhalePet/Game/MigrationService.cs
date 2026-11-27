@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -32,6 +33,18 @@ public sealed class CharacterImageTransfer
     public string Data { get; set; } = "";
 }
 
+/// <summary>
+/// Reading text travels as compressed bytes, never as a device-specific path.
+/// The source file is only read during export.
+/// </summary>
+public sealed class ReadingDocumentTransfer
+{
+    public string FileName { get; set; } = "";
+    public string Data { get; set; } = "";
+    public long OriginalLength { get; set; }
+    public string Sha256 { get; set; } = "";
+}
+
 public sealed class MigrationPayload
 {
     public int Version { get; set; } = 1;
@@ -60,6 +73,7 @@ public sealed class MigrationPayload
     public List<ClipboardEntry>? Clipboard { get; set; }
     public PetSettings? Settings { get; set; }
     public List<CharacterImageTransfer> CharacterImages { get; set; } = new();
+    public ReadingDocumentTransfer? ReadingDocument { get; set; }
 
     public string AvatarType { get; set; } = nameof(AvatarKind.DefaultStatic);
     public string? CurrentGifId { get; set; }
@@ -95,6 +109,11 @@ public sealed class MigrationEnvelope
 /// </summary>
 public sealed class MigrationService
 {
+    // A novel is stored compressed and base64-encoded inside the package. Keep a
+    // generous but bounded limit so a malformed package cannot exhaust memory.
+    private const int MaxReadingDocumentBytes = 64 * 1024 * 1024;
+    private const int MaxPackageCharacters = 128 * 1024 * 1024;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -106,7 +125,7 @@ public sealed class MigrationService
     {
         "version", "appVersion", "exportedAt", "level", "affection", "affectionCarry", "mood", "satiety",
         "food", "ingredients", "fish", "totalCompanionSeconds", "continuousSignIn", "totalSignInDays",
-        "lastSignDateIndex", "maxLevelAffection", "inventory", "staging", "defaultAvatars", "todos", "memos", "clipboard", "settings", "characterImages", "avatarType", "currentGifId", "currentCustomImagePath",
+        "lastSignDateIndex", "maxLevelAffection", "inventory", "staging", "defaultAvatars", "todos", "memos", "clipboard", "settings", "characterImages", "readingDocument", "avatarType", "currentGifId", "currentCustomImagePath",
         "currentCustomImageData", "currentLive2DModelId",
         "currentAvatarUpdatedAt", "gifs", "achievements", "counters", "signInDates",
     };
@@ -139,6 +158,11 @@ public sealed class MigrationService
     private static readonly HashSet<string> CharacterImageKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "role", "sourcePath", "data",
+    };
+
+    private static readonly HashSet<string> ReadingDocumentKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "fileName", "data", "originalLength", "sha256",
     };
 
     private static readonly string[] ForbiddenPayloadKeys =
@@ -181,7 +205,7 @@ public sealed class MigrationService
 
         var prompt = new PasswordPromptWindow(
             "设置迁移密码",
-            "迁移包只包含用户资产（等级、好感、签到、成就、解锁与启用的动态图等），不包含设备绑定、激活状态、最后在线时间和当日次数。",
+            "迁移包包含用户资产（设置、角色数据、备忘录、待办、剪贴板、自定义形象和阅读小说内容），不包含设备绑定、激活状态、最后在线时间和当日次数。",
             confirm: true,
             "密码长度至少 8 位。请妥善保管：丢失密码将无法恢复迁移包内容。") { Owner = owner };
         if (prompt.ShowDialog() != true) return;
@@ -259,7 +283,7 @@ public sealed class MigrationService
         try
         {
             var json = File.ReadAllText(dialog.FileName, Encoding.UTF8);
-            if (json.Length > 40 * 1024 * 1024) throw new InvalidOperationException("迁移包过大。");
+            if (json.Length > MaxPackageCharacters) throw new InvalidOperationException("迁移包过大。");
             using var document = JsonDocument.Parse(json);
             ValidateKeys(document.RootElement, EnvelopeKeys, "迁移包");
 
@@ -311,6 +335,9 @@ public sealed class MigrationService
                           ?? throw new InvalidOperationException("迁移包内容无效。");
             CryptographicOperations.ZeroMemory(plaintext);
 
+            var restoredReadingPath = payload.Settings is null
+                ? null
+                : RestoreReadingDocument(payload.ReadingDocument);
             var snapshot = BuildSnapshot(payload);
             _engine.Save();
             _engine.Database.Backup();
@@ -366,6 +393,9 @@ public sealed class MigrationService
             if (payload.Settings is { } importedSettings)
             {
                 ImportCharacterImages(payload.CharacterImages, importedSettings);
+                importedSettings.ReadingTextPath = payload.ReadingDocument is null
+                    ? ""
+                    : restoredReadingPath ?? "";
                 importedSettings.Normalize();
                 SettingsStore.Save(importedSettings);
             }
@@ -387,6 +417,11 @@ public sealed class MigrationService
         var exportedSettings = SettingsStore.Load();
 
         string? customData = null;
+        var readingDocument = BuildReadingDocument(exportedSettings);
+        // The source path is device-specific. Import rewrites it to the
+        // restored local file, so never carry it inside the package.
+        exportedSettings.ReadingTextPath = "";
+
         if (state.Avatar == AvatarKind.CustomImage && !string.IsNullOrWhiteSpace(state.CurrentCustomImagePath) &&
             File.Exists(state.CurrentCustomImagePath))
         {
@@ -461,6 +496,7 @@ public sealed class MigrationService
                 .ToList(),
             Settings = exportedSettings,
             CharacterImages = CollectCharacterImages(exportedSettings),
+            ReadingDocument = readingDocument,
             AvatarType = customData is null && state.Avatar == AvatarKind.CustomImage
                 ? nameof(AvatarKind.DefaultStatic)
                 : state.AvatarType,
@@ -483,6 +519,105 @@ public sealed class MigrationService
             Counters = snapshot.Counters,
             SignInDates = snapshot.SignInDates,
         };
+    }
+
+    private static ReadingDocumentTransfer? BuildReadingDocument(PetSettings settings)
+    {
+        var path = (settings.ReadingTextPath ?? "").Trim();
+        if (path.Length == 0 || !File.Exists(path)) return null;
+
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.Length is 0 or > MaxReadingDocumentBytes) return null;
+            var bytes = File.ReadAllBytes(path);
+            if (bytes.Length is 0 or > MaxReadingDocumentBytes) return null;
+
+            using var output = new MemoryStream();
+            using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
+            {
+                gzip.Write(bytes);
+            }
+
+            var name = Path.GetFileName(path);
+            if (string.IsNullOrWhiteSpace(name)) name = "novel.txt";
+            if (name.Length > 120) name = name[^120..];
+            return new ReadingDocumentTransfer
+            {
+                FileName = name,
+                Data = Convert.ToBase64String(output.ToArray()),
+                OriginalLength = bytes.Length,
+                Sha256 = Convert.ToHexString(SHA256.HashData(bytes)),
+            };
+        }
+        catch
+        {
+            // A missing or unreadable novel must not block game-data migration.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Restores the reading text from the package into a local file and returns
+    /// its new path. The optional directory is used by the smoke tests.
+    /// </summary>
+    private static string? RestoreReadingDocument(ReadingDocumentTransfer? transfer,
+        string? directory = null)
+    {
+        if (transfer is null) return null;
+        if (transfer.Data.Length > MaxPackageCharacters)
+            throw new InvalidOperationException("迁移包中的小说内容过大。");
+
+        byte[] compressed;
+        try { compressed = Convert.FromBase64String(transfer.Data); }
+        catch { throw new InvalidOperationException("迁移包中的小说内容格式无效。"); }
+        if (compressed.Length == 0)
+            throw new InvalidOperationException("迁移包中的小说内容为空。");
+
+        if (transfer.OriginalLength is <= 0 or > MaxReadingDocumentBytes)
+            throw new InvalidOperationException("迁移包中的小说大小异常。");
+        var expectedLength = (int)transfer.OriginalLength;
+        byte[] bytes;
+
+        try
+        {
+            using var input = new MemoryStream(compressed);
+            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            using var output = new MemoryStream(expectedLength);
+            var buffer = new byte[81920];
+            int read;
+            while ((read = gzip.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                if (output.Length + read > MaxReadingDocumentBytes)
+                    throw new InvalidOperationException("迁移包中的小说超过大小上限。");
+                output.Write(buffer, 0, read);
+            }
+            bytes = output.ToArray();
+        }
+        catch (InvalidOperationException) { throw; }
+        catch { throw new InvalidOperationException("迁移包中的小说解压失败。"); }
+
+        if (bytes.Length != transfer.OriginalLength)
+            throw new InvalidOperationException("迁移包中的小说长度校验失败。");
+        var actualHash = Convert.ToHexString(SHA256.HashData(bytes));
+        if (!string.Equals(actualHash, transfer.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("迁移包中的小说完整性校验失败。");
+
+        var safeName = Path.GetFileName(transfer.FileName ?? "");
+        if (string.IsNullOrWhiteSpace(safeName)) safeName = "novel.txt";
+        foreach (var invalid in Path.GetInvalidFileNameChars()) safeName = safeName.Replace(invalid, '_');
+        if (safeName.Length > 80) safeName = safeName[^80..];
+        if (!safeName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+            safeName = Path.GetFileNameWithoutExtension(safeName) + ".txt";
+
+        directory = string.IsNullOrWhiteSpace(directory)
+            ? Path.Combine(PersistentStore.LocalDirectory, "migrated-reading")
+            : directory;
+        Directory.CreateDirectory(directory);
+        var target = Path.Combine(directory,
+            actualHash[..16].ToLowerInvariant() + "-" + safeName);
+        File.WriteAllBytes(target, bytes);
+        return target;
     }
 
     private static List<CharacterImageTransfer> CollectCharacterImages(PetSettings settings)
@@ -842,6 +977,28 @@ public sealed class MigrationService
                 if (image.ValueKind != JsonValueKind.Object)
                     throw new InvalidOperationException("迁移包角色图片格式无效。");
                 ValidateKeys(image, CharacterImageKeys, "迁移包角色图片记录");
+            }
+        }
+
+        if (root.TryGetProperty("readingDocument", out var readingDocument))
+        {
+            if (readingDocument.ValueKind is not JsonValueKind.Object and not JsonValueKind.Null)
+                throw new InvalidOperationException("迁移包小说内容格式无效。");
+            if (readingDocument.ValueKind == JsonValueKind.Object)
+            {
+                ValidateKeys(readingDocument, ReadingDocumentKeys, "迁移包小说内容");
+                if (readingDocument.TryGetProperty("originalLength", out var length) &&
+                    (length.ValueKind != JsonValueKind.Number || !length.TryGetInt64(out var value) ||
+                     value is <= 0 or > MaxReadingDocumentBytes))
+                {
+                    throw new InvalidOperationException("迁移包中的小说大小异常。");
+                }
+                if (readingDocument.TryGetProperty("data", out var data) &&
+                    (data.ValueKind != JsonValueKind.String ||
+                     data.GetString()!.Length > MaxPackageCharacters))
+                {
+                    throw new InvalidOperationException("迁移包中的小说内容过大。");
+                }
             }
         }
 
