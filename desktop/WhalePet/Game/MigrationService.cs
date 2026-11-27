@@ -65,6 +65,7 @@ public sealed class MigrationPayload
     public string? CurrentGifId { get; set; }
     public string? CurrentCustomImagePath { get; set; }
     public string? CurrentCustomImageData { get; set; }
+    public string CurrentLive2DModelId { get; set; } = "seethrough_output";
     public DateTimeOffset? CurrentAvatarUpdatedAt { get; set; }
 
     public List<GifTransfer> Gifs { get; set; } = new();
@@ -106,7 +107,7 @@ public sealed class MigrationService
         "version", "appVersion", "exportedAt", "level", "affection", "affectionCarry", "mood", "satiety",
         "food", "ingredients", "fish", "totalCompanionSeconds", "continuousSignIn", "totalSignInDays",
         "lastSignDateIndex", "maxLevelAffection", "inventory", "staging", "defaultAvatars", "todos", "memos", "clipboard", "settings", "characterImages", "avatarType", "currentGifId", "currentCustomImagePath",
-        "currentCustomImageData",
+        "currentCustomImageData", "currentLive2DModelId",
         "currentAvatarUpdatedAt", "gifs", "achievements", "counters", "signInDates",
     };
 
@@ -466,6 +467,7 @@ public sealed class MigrationService
             CurrentGifId = state.CurrentGifId,
             CurrentCustomImagePath = null,
             CurrentCustomImageData = customData,
+            CurrentLive2DModelId = state.CurrentLive2DModelId,
             CurrentAvatarUpdatedAt = state.CurrentAvatarUpdatedAt,
             Gifs = snapshot.Gifs.Where(gif => gif.IsUnlocked).Select(gif => new GifTransfer
             {
@@ -594,6 +596,9 @@ public sealed class MigrationService
             CurrentGifId = payload.CurrentGifId,
             CurrentCustomImagePath = null,
             CurrentCustomImageData = payload.CurrentCustomImageData,
+            CurrentLive2DModelId = string.IsNullOrWhiteSpace(payload.CurrentLive2DModelId)
+                ? "seethrough_output"
+                : payload.CurrentLive2DModelId,
             CurrentAvatarUpdatedAt = payload.CurrentAvatarUpdatedAt,
         };
 
@@ -648,6 +653,20 @@ public sealed class MigrationService
             catch
             {
                 state.AvatarType = nameof(AvatarKind.DefaultStatic);
+            }
+        }
+
+        if (state.Avatar == AvatarKind.Live2D)
+        {
+            var modelId = string.IsNullOrWhiteSpace(state.CurrentLive2DModelId)
+                ? "seethrough_output"
+                : state.CurrentLive2DModelId;
+            var modelPath = Path.Combine(AppContext.BaseDirectory, "Live2DWeb", "models", modelId,
+                modelId + ".model3.json");
+            if (!File.Exists(modelPath))
+            {
+                state.AvatarType = nameof(AvatarKind.DefaultStatic);
+                Live2DLog.Write("迁移目标缺少 Live2D 模型，已回退默认形象");
             }
         }
 

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live2D</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; -webkit-app-region: no-drag; }
+    canvas { display: block; width: 100%; height: 100%; background: transparent; -webkit-app-region: no-drag; }
+    #error { position: absolute; left: 12px; right: 12px; top: 12px; color: #ffd0d0; font: 12px "Microsoft YaHei UI", sans-serif; white-space: pre-wrap; display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="error"></div>
+  <script>
+    window.addEventListener('error', function (e) {
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage({
+            type: 'pageError',
+            message: String(e.message || e.error || 'script error'),
+            stack: String((e.error && e.error.stack) || '')
+          });
+        }
+      } catch (_) { }
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage({
+            type: 'pageError',
+            message: String((e.reason && e.reason.message) || e.reason || 'rejection'),
+            stack: String((e.reason && e.reason.stack) || '')
+          });
+        }
+      } catch (_) { }
+    });
+  </script>
+  <script src="lib/pixi.min.js"></script>
+  <script src="lib/live2dcubismcore.min.js"></script>
+  <script src="lib/live2d.min.js"></script>
+  <script src="lib/index.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

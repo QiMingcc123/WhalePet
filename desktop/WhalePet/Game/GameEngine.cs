@@ -41,6 +41,7 @@ public sealed class GameEngine
     public event Action? Changed;
     public event Action? AvatarChanged;
     public event Action<string>? Toast;
+    public string? AvatarFallbackMessage { get; private set; }
 
     public GameState State => _state;
     public GameStore Database => _store;
@@ -884,6 +885,17 @@ public sealed class GameEngine
 
     public (AvatarKind Kind, string? GifId, string? CustomPath) EffectiveAvatar()
     {
+        if (_state.Avatar == AvatarKind.Live2D)
+        {
+            var modelId = string.IsNullOrWhiteSpace(_state.CurrentLive2DModelId)
+                ? "seethrough_output"
+                : _state.CurrentLive2DModelId;
+            var modelPath = Path.Combine(AppContext.BaseDirectory, "Live2DWeb", "models", modelId,
+                modelId + ".model3.json");
+            if (File.Exists(modelPath)) return (AvatarKind.Live2D, null, null);
+            return (AvatarKind.DefaultStatic, null, null);
+        }
+
         if (_state.Avatar == AvatarKind.Gif &&
             !string.IsNullOrWhiteSpace(_state.CurrentGifId) &&
             _enabledGifs.Contains(_state.CurrentGifId) &&
@@ -904,8 +916,51 @@ public sealed class GameEngine
         return (AvatarKind.DefaultStatic, null, null);
     }
 
+    public (bool Ok, string Message) SelectLive2D(string modelId)
+    {
+        var id = string.IsNullOrWhiteSpace(modelId) ? "seethrough_output" : modelId.Trim();
+        var modelPath = Path.Combine(AppContext.BaseDirectory, "Live2DWeb", "models", id, id + ".model3.json");
+        if (!File.Exists(modelPath))
+        {
+            FallbackToDefault("Live2D 模型缺失，已回退到默认形象");
+            return (false, "Live2D 模型缺失，已回退到默认形象");
+        }
+        _state.AvatarType = nameof(AvatarKind.Live2D);
+        _state.CurrentLive2DModelId = id;
+        _state.CurrentGifId = null;
+        _state.CurrentCustomImagePath = null;
+        _state.CurrentCustomImageData = null;
+        _state.CurrentAvatarUpdatedAt = DateTimeOffset.Now;
+        SaveState();
+        AvatarChanged?.Invoke();
+        Changed?.Invoke();
+        return (true, "已切换 Live2D 形象。");
+    }
+
+    public void FallbackToDefault(string message)
+    {
+        AvatarFallbackMessage = message;
+        _state.AvatarType = nameof(AvatarKind.DefaultStatic);
+        _state.CurrentGifId = null;
+        _state.CurrentCustomImagePath = null;
+        _state.CurrentCustomImageData = null;
+        _state.CurrentAvatarUpdatedAt = DateTimeOffset.Now;
+        SaveState();
+        Toast?.Invoke(message);
+        AvatarChanged?.Invoke();
+        Changed?.Invoke();
+    }
+
     private void ValidateAvatar()
     {
+        if (_state.Avatar == AvatarKind.Live2D)
+        {
+            var id = string.IsNullOrWhiteSpace(_state.CurrentLive2DModelId)
+                ? "seethrough_output"
+                : _state.CurrentLive2DModelId;
+            var path = Path.Combine(AppContext.BaseDirectory, "Live2DWeb", "models", id, id + ".model3.json");
+            if (!File.Exists(path)) FallbackToDefault("Live2D 模型缺失，已回退到默认形象");
+        }
         if (_state.Avatar == AvatarKind.Gif &&
             (string.IsNullOrWhiteSpace(_state.CurrentGifId) ||
              !_enabledGifs.Contains(_state.CurrentGifId) ||

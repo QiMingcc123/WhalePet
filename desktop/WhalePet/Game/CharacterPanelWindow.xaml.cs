@@ -844,6 +844,7 @@ public partial class CharacterPanelWindow : Window
         {
             AvatarKind.Gif => avatar.GifId ?? "动态图",
             AvatarKind.CustomImage => "自定义图片",
+            AvatarKind.Live2D => "Live2D · 大肥鱼",
             _ => "内置默认形象",
         };
 

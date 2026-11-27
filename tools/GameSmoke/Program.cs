@@ -382,6 +382,29 @@ try
           !ReadingService.RawText.Any(char.IsControl) &&
           ReadingService.PageCount == 3,
         "阅读区先清洗控制字符/空白再分页");
+    Check(Enum.TryParse<AvatarKind>("Live2D", true, out var live2dKind) &&
+          live2dKind == AvatarKind.Live2D &&
+          new GameState().CurrentLive2DModelId == "seethrough_output",
+        "Live2D 形象类型与默认模型 ID");
+
+    // 多显示器吸附：使用副屏工作区（1920..3840）验证算法不会退回主屏边界。
+    var secondary = new MonitorPlacement.RECT { Left = 1920, Top = 0, Right = 3840, Bottom = 1040 };
+    var nearSecondaryLeft = new MonitorPlacement.RECT { Left = 1925, Top = 300, Right = 2075, Bottom = 447 };
+    var snappedSecondary = MonitorPlacement.ConstrainToWorkArea(nearSecondaryLeft, secondary, 15, true);
+    Check(snappedSecondary.Left == 1920 && snappedSecondary.Top == 300,
+        "副屏左边缘 15px 内吸附到副屏工作区 1920");
+    var nearSecondaryRight = new MonitorPlacement.RECT { Left = 3680, Top = 300, Right = 3830, Bottom = 447 };
+    var snappedSecondaryRight = MonitorPlacement.ConstrainToWorkArea(nearSecondaryRight, secondary, 15, true);
+    Check(snappedSecondaryRight.Left == 3690,
+        "副屏右边缘 15px 内吸附到副屏工作区 3840");
+    var outsideSecondary = new MonitorPlacement.RECT { Left = 3800, Top = 1000, Right = 3950, Bottom = 1147 };
+    var clampedSecondary = MonitorPlacement.ConstrainToWorkArea(outsideSecondary, secondary, 15, true);
+    Check(clampedSecondary.Left == 3690 && clampedSecondary.Top == 893,
+        "拖出副屏工作区时坐标被夹回副屏范围");
+    var primary = new MonitorPlacement.RECT { Left = 0, Top = 0, Right = 1920, Bottom = 1040 };
+    var primaryLeft = new MonitorPlacement.RECT { Left = 10, Top = 100, Right = 160, Bottom = 247 };
+    Check(MonitorPlacement.ConstrainToWorkArea(primaryLeft, primary, 15, true).Left == 0,
+        "主屏左边缘吸附保持原有行为");
 
     var singleKey = HotkeyGesture.TryParse("A", out var singleGesture) &&
                     singleGesture.Matches(Key.A, ModifierKeys.None);

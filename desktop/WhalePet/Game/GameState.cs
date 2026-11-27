@@ -5,6 +5,7 @@ public enum AvatarKind
     DefaultStatic,
     Gif,
     CustomImage,
+    Live2D,
 }
 
 public enum Fortune
@@ -45,6 +46,7 @@ public sealed class GameState
     public string? CurrentGifId { get; set; }
     public string? CurrentCustomImagePath { get; set; }
     public string? CurrentCustomImageData { get; set; }
+    public string CurrentLive2DModelId { get; set; } = "seethrough_output";
     public DateTimeOffset? CurrentAvatarUpdatedAt { get; set; }
 
     public int DrawDateIndex { get; set; }

@@ -9,7 +9,7 @@ dist/publish-tmp/
 dist
 gifs
 docs
-Live2DWeb
+Live2DWeb/models
 verification
 
 # OS files

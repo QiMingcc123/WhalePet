@@ -14,6 +14,9 @@ public sealed class GlobalInputHook : IDisposable
     private const int WM_LBUTTONDOWN = 0x0201;
     private const int WM_RBUTTONDOWN = 0x0204;
     private const int WM_MBUTTONDOWN = 0x0207;
+    private const int WM_LBUTTONUP = 0x0202;
+    private const int WM_RBUTTONUP = 0x0205;
+    private const int WM_MBUTTONUP = 0x0208;
 
     private delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
@@ -48,6 +51,8 @@ public sealed class GlobalInputHook : IDisposable
     public event Action<int>? KeyPressed;
     public event Action<int, int>? PointerMoved;
     public event Action<int, int>? PointerPressed;
+    public event Action<int, int, int>? PointerButtonPressed;
+    public event Action<int, int, int>? PointerButtonReleased;
 
     public GlobalInputHook()
     {
@@ -77,7 +82,20 @@ public sealed class GlobalInputHook : IDisposable
                 }
                 else if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN)
                 {
-                    if (GetCursorPos(out var point)) PointerPressed?.Invoke(point.X, point.Y);
+                    if (GetCursorPos(out var point))
+                    {
+                        PointerPressed?.Invoke(point.X, point.Y);
+                        PointerButtonPressed?.Invoke(point.X, point.Y,
+                            message == WM_LBUTTONDOWN ? 1 : message == WM_RBUTTONDOWN ? 2 : 3);
+                    }
+                }
+                else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP)
+                {
+                    if (GetCursorPos(out var point))
+                    {
+                        PointerButtonReleased?.Invoke(point.X, point.Y,
+                            message == WM_LBUTTONUP ? 1 : message == WM_RBUTTONUP ? 2 : 3);
+                    }
                 }
             }
         }

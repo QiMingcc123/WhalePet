@@ -99,6 +99,7 @@ public sealed class GameStore : IDisposable
             CurrentGifId = Text(reader, "CurrentGifId"),
             CurrentCustomImagePath = Text(reader, "CurrentCustomImagePath"),
             CurrentCustomImageData = Text(reader, "CurrentCustomImageData"),
+            CurrentLive2DModelId = Text(reader, "CurrentLive2DModelId") ?? "seethrough_output",
             CurrentAvatarUpdatedAt = Time(reader, "CurrentAvatarUpdatedAt"),
             DrawDateIndex = Int(reader, "DrawDateIndex"),
             DrawResult = Text(reader, "DrawResult") ?? nameof(Fortune.None),
@@ -164,6 +165,7 @@ public sealed class GameStore : IDisposable
             ["CurrentGifId"] = state.CurrentGifId,
             ["CurrentCustomImagePath"] = state.CurrentCustomImagePath,
             ["CurrentCustomImageData"] = state.CurrentCustomImageData,
+            ["CurrentLive2DModelId"] = state.CurrentLive2DModelId,
             ["CurrentAvatarUpdatedAt"] = state.CurrentAvatarUpdatedAt is null ? null : Iso(state.CurrentAvatarUpdatedAt.Value),
             ["DrawDateIndex"] = state.DrawDateIndex,
             ["DrawResult"] = state.DrawResult,
@@ -674,6 +676,7 @@ public sealed class GameStore : IDisposable
                     CurrentGifId TEXT,
                     CurrentCustomImagePath TEXT,
                     CurrentCustomImageData TEXT,
+                    CurrentLive2DModelId TEXT,
                     CurrentAvatarUpdatedAt TEXT,
                     DrawDateIndex INTEGER NOT NULL DEFAULT 0,
                     DrawResult TEXT NOT NULL DEFAULT 'None',
@@ -805,6 +808,10 @@ public sealed class GameStore : IDisposable
         if (!columns.Contains("LotMessage"))
         {
             Execute("ALTER TABLE AppState ADD COLUMN LotMessage TEXT");
+        }
+        if (!columns.Contains("CurrentLive2DModelId"))
+        {
+            Execute("ALTER TABLE AppState ADD COLUMN CurrentLive2DModelId TEXT");
         }
     }
 

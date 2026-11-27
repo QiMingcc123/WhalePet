@@ -34,5 +34,42 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\Live2DWeb\**\*"
+             Exclude="..\..\Live2DWeb\models\seethrough_output\seethrough_output.4096\**\*">
+      <Link>Live2DWeb\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\Live2DWeb\models\seethrough_output\seethrough_output.4096\*.png">
+      <Link>Live2DWeb\models\seethrough_output\seethrough_output.4096\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="CopyLive2DTextures" AfterTargets="Build">
+    <ItemGroup>
+      <Live2DTexture Include="$(MSBuildProjectDirectory)\..\..\Live2DWeb\models\seethrough_output\seethrough_output.4096\*.png" />
+      <Live2DModelFile Include="$(MSBuildProjectDirectory)\..\..\Live2DWeb\models\seethrough_output\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(Live2DTexture)"
+          DestinationFolder="$(OutDir)Live2DWeb\models\seethrough_output\seethrough_output.4096" />
+    <Copy SourceFiles="@(Live2DModelFile)"
+          DestinationFolder="$(OutDir)Live2DWeb\models\seethrough_output" />
+  </Target>
+
+  <Target Name="CopyLive2DTexturesPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <Live2DTexturePublish Include="$(MSBuildProjectDirectory)\..\..\Live2DWeb\models\seethrough_output\seethrough_output.4096\*.png" />
+      <Live2DModelFilePublish Include="$(MSBuildProjectDirectory)\..\..\Live2DWeb\models\seethrough_output\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(Live2DTexturePublish)"
+          DestinationFolder="$(PublishDir)Live2DWeb\models\seethrough_output\seethrough_output.4096" />
+    <Copy SourceFiles="@(Live2DModelFilePublish)"
+          DestinationFolder="$(PublishDir)Live2DWeb\models\seethrough_output" />
+  </Target>
 </Project>

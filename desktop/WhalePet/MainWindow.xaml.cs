@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -9,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using WhalePet.Game;
 
 namespace WhalePet;
@@ -89,6 +91,32 @@ public partial class MainWindow : Window
     private bool _readingNextRegistered;
     private CharacterPanelWindow? _characterPanel;
     private AvatarSwitchWindow? _avatarSwitch;
+    private Live2DWindow? _live2DWindow;
+    private bool _live2DInitializing;
+    private string _live2DModelId = "seethrough_output";
+    private bool _live2DDragging;
+    private bool _live2DPointerDown;
+    private bool _live2DPendingRightClick;
+    private DateTime _lastPetMenuAt = DateTime.MinValue;
+    private bool _live2DSyncQueued;
+    private int _live2DLayoutToken;
+    private bool _displaySettingsSubscribed;
+    private double _live2DPointerStartX;
+    private double _live2DPointerStartY;
+    private double _live2DPointerStartLeft;
+    private double _live2DPointerStartTop;
+
+    private static readonly IReadOnlyDictionary<string, string> Live2DPartExpressions =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["head"] = "微笑",
+            ["hands"] = "惊讶",
+            ["body"] = "害羞",
+            ["feet"] = "生气",
+            ["tail"] = "困倦",
+            ["skirt"] = "阴沉",
+            ["face"] = "悲伤",
+        };
     private ReadingWindow? _readingWindow;
     private OrganizerWindow? _organizerWindow;
     private TodoWindow? _todoWindow;
@@ -120,6 +148,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
+        LocationChanged += OnLive2DGeometryChanged;
+        DpiChanged += OnLive2DDpiChanged;
+        StateChanged += OnLive2DStateChanged;
+        IsVisibleChanged += OnLive2DVisibilityChanged;
         _settings = SettingsStore.Load();
         _settings.Normalize();
         // Persist the recovered/merged document into the stable user location.
@@ -178,13 +210,23 @@ public partial class MainWindow : Window
         _inputHook.KeyPressed += OnGlobalKeyPressed;
         _inputHook.PointerMoved += OnGlobalPointerMoved;
         _inputHook.PointerPressed += OnGlobalPointerPressed;
+        _inputHook.PointerButtonPressed += OnGlobalPointerButtonPressed;
+        _inputHook.PointerButtonReleased += OnGlobalPointerButtonReleased;
         UpdateLayout();
         RestorePosition();
         SetState(PetState.Main, true);
         ApplyAppearance();
         PositionStatusActions();
         ShowGreeting();
+        // Show the fallback notice after the greeting so a missing Live2D
+        // model still tells the user why the default image is displayed.
+        if (GameRuntime.Engine?.AvatarFallbackMessage is { } live2DFallback &&
+            !string.IsNullOrWhiteSpace(live2DFallback))
+        {
+            ShowSpeech(live2DFallback);
+        }
         UpdateStatusText();
+        SubscribeDisplaySettings();
         if (GameRuntime.GifError is not null) ShowSpeech("资源完整性异常：" + GameRuntime.GifError);
         else if (GameRuntime.Engine?.State.TimeRollbackDetected == true)
             ShowSpeech(GameRuntime.Engine.State.TimeRollbackNotice);
@@ -198,8 +240,7 @@ public partial class MainWindow : Window
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
-    {
-        _hwnd = new WindowInteropHelper(this).Handle;
+    {        _hwnd = new WindowInteropHelper(this).Handle;
         _hwndSource = HwndSource.FromHwnd(_hwnd);
         _hwndSource?.AddHook(WndProc);
         Native.ListenForClipboard(_hwnd);
@@ -357,7 +398,123 @@ public partial class MainWindow : Window
             handled = true;
             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(PollClipboard));
         }
+        else if (msg == 0x0216 && IsLive2DMode && !_collapsedAtEdge) // WM_MOVING
+        {
+            // Only the Live2D mode uses the monitor-aware clamp/snap. The rect
+            // in lParam is in physical pixels, so all work is done in Win32
+            // coordinates and MonitorFromRect picks the current display.
+            var proposed = Marshal.PtrToStructure<MonitorPlacement.RECT>(lParam);
+            var constrained = MonitorPlacement.Constrain(
+                proposed, SnapDistancePixels(), snap: true);
+            if (!RectsEqual(proposed, constrained))
+            {
+                Marshal.StructureToPtr(constrained, lParam, false);
+            }
+            handled = true;
+            return new IntPtr(1);
+        }
         return IntPtr.Zero;
+    }
+
+    private bool IsLive2DMode =>
+        !_closing && GameRuntime.Engine?.State.Avatar == AvatarKind.Live2D;
+
+    private int SnapDistancePixels()
+    {
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        return Math.Max(1, (int)Math.Round(MonitorPlacement.SnapDistancePx * scale));
+    }
+
+    private static bool RectsEqual(MonitorPlacement.RECT left, MonitorPlacement.RECT right)
+    {
+        return left.Left == right.Left && left.Top == right.Top &&
+               left.Right == right.Right && left.Bottom == right.Bottom;
+    }
+
+    /// <summary>Clamps the real HWND rect to the monitor it currently occupies
+    /// and snaps edges within 15 px. Works for manual drags, which do not
+    /// produce WM_MOVING because the window has no caption.</summary>
+    private void ConstrainPetWindow(bool snap)
+    {
+        if (!_loaded || _closing || _collapsedAtEdge || _hwnd == IntPtr.Zero) return;
+        if (!MonitorPlacement.TryGetWindowRect(_hwnd, out var current)) return;
+        var constrained = MonitorPlacement.Constrain(current, SnapDistancePixels(), snap);
+        if (RectsEqual(current, constrained)) return;
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        _adjustingPosition = true;
+        Left += (constrained.Left - current.Left) / dpi.DpiScaleX;
+        Top += (constrained.Top - current.Top) / dpi.DpiScaleY;
+        _adjustingPosition = false;
+        _anchorBottom = Top + ActualHeight;
+        PositionWorkBadge();
+    }
+
+    private void SubscribeDisplaySettings()
+    {
+        if (_displaySettingsSubscribed) return;
+        try
+        {
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+            _displaySettingsSubscribed = true;
+        }
+        catch (Exception error)
+        {
+            Live2DLog.Write("display settings subscribe failed: " + error.Message);
+        }
+    }
+
+    private void UnsubscribeDisplaySettings()
+    {
+        if (!_displaySettingsSubscribed) return;
+        try { SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged; } catch { }
+        _displaySettingsSubscribed = false;
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        if (_closing) return;
+        Live2DLog.Write("display settings changed event");
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(async () =>
+        {
+            // The shell can raise the event before the new monitor list is
+            // visible through GetMonitorInfo. Check now and twice more after
+            // short delays so a removed/resized monitor cannot leave the pet
+            // outside every work area.
+            EnsureWindowOnScreen();
+            await Task.Delay(600);
+            if (!_closing) EnsureWindowOnScreen();
+            await Task.Delay(1400);
+            if (!_closing) EnsureWindowOnScreen();
+        }));
+    }
+
+    /// <summary>After a resolution change or monitor removal, pull a window
+    /// that no longer has a usable monitor overlap back to the primary screen.</summary>
+    private void EnsureWindowOnScreen()
+    {
+        if (_closing || _hwnd == IntPtr.Zero) return;
+        if (!MonitorPlacement.TryGetWindowRect(_hwnd, out var current))
+        {
+            Live2DLog.Write("display recovery: no window rect");
+            return;
+        }
+        var visible = MonitorPlacement.IsVisibleOnAnyMonitor(current);
+        Live2DLog.Write(
+            $"display recovery check rect={current.Left},{current.Top},{current.Right},{current.Bottom} visible={visible}");
+        if (visible) return;
+
+        var recovered = MonitorPlacement.RecoverToPrimary(current);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        _adjustingPosition = true;
+        Left += (recovered.Left - current.Left) / dpi.DpiScaleX;
+        Top += (recovered.Top - current.Top) / dpi.DpiScaleY;
+        _adjustingPosition = false;
+        _anchorBottom = Top + ActualHeight;
+        Live2DLog.Write(
+            $"display changed: moved window from {current.Left},{current.Top} to {recovered.Left},{recovered.Top}");
+        SyncLive2DWindow();
+        SaveWindowPosition();
     }
 
     private void StartScreenshot()
@@ -403,12 +560,35 @@ public partial class MainWindow : Window
             return;
         }
         GameKeyPressed?.Invoke(virtualKey);
+        if (Live2DInputReady())
+        {
+            _live2DWindow!.SendInput(new { type = "input", @event = "keyDown" });
+        }
     }
 
     private void OnGlobalPointerMoved(int x, int y)
     {
         _pointerUntil = DateTime.Now.AddMilliseconds(1600);
         PositionPointerGlyph(x, y);
+        ForwardLive2DMove(x, y);
+        if (_live2DPointerDown && _live2DWindow is not null)
+        {
+            var dx = x - _live2DPointerStartX;
+            var dy = y - _live2DPointerStartY;
+            if (!_live2DDragging && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4))
+            {
+                _live2DDragging = true;
+                Live2DLog.Write($"live2d drag start at {x},{y}");
+            }
+            if (_live2DDragging)
+            {
+                var dpi = VisualTreeHelper.GetDpi(this);
+                Left = _live2DPointerStartLeft + (x - _live2DPointerStartX) / dpi.DpiScaleX;
+                Top = _live2DPointerStartTop + (y - _live2DPointerStartY) / dpi.DpiScaleY;
+                ConstrainPetWindow(true);
+                SyncLive2DWindow();
+            }
+        }
     }
 
     private void OnGlobalPointerPressed(int x, int y)
@@ -416,7 +596,143 @@ public partial class MainWindow : Window
         _pressedUntil = DateTime.Now.AddMilliseconds(260);
         _pointerUntil = DateTime.Now.AddMilliseconds(1600);
         PositionPointerGlyph(x, y);
-        AnimatePress();
+        // The press animation scales CharacterHost around its bottom. In
+        // Live2D mode that would also move the separate overlay window for a
+        // frame and leave it offset, so keep the overlay geometrically fixed.
+        if (!IsLive2DMode) AnimatePress();
+    }
+
+    private void OnGlobalPointerButtonPressed(int x, int y, int button)
+    {
+        if (!Live2DInputReady()) return;
+        if (button == 2)
+        {
+            _live2DPendingRightClick = IsScreenPointInsideCharacter(x, y);
+            return;
+        }
+        if (button != 1) return;
+        if (!IsScreenPointInsideCharacter(x, y)) return;
+        _live2DPointerDown = true;
+        _live2DDragging = false;
+        _live2DPointerStartX = x;
+        _live2DPointerStartY = y;
+        _live2DPointerStartLeft = Left;
+        _live2DPointerStartTop = Top;
+    }
+
+    private void OnGlobalPointerButtonReleased(int x, int y, int button)
+    {
+        if (button == 2)
+        {
+            var pending = _live2DPendingRightClick;
+            _live2DPendingRightClick = false;
+            if (pending && IsScreenPointInsideCharacter(x, y)) OpenPetContextMenu();
+            return;
+        }
+        if (button != 1 || !_live2DPointerDown) return;
+        var wasDragging = _live2DDragging;
+        _live2DPointerDown = false;
+        _live2DDragging = false;
+        if (wasDragging || !Live2DInputReady()) return;
+        try
+        {
+            if (!_live2DWindow!.TryGetModelNormalized(new Point(x, y), out var nx, out var ny))
+            {
+                return;
+            }
+            var part = PartForNormalized(nx, ny);
+            if (part is not null) OnLive2DPartClicked(part);
+        }
+        catch (Exception error)
+        {
+            Live2DLog.Write("part error: " + error.Message);
+        }
+    }
+
+    private static string? PartForNormalized(double nx, double ny)
+    {
+        if (ny < 0.46)
+        {
+            if (nx < 0.20 || nx > 0.80) return "hands";
+            if (nx > 0.32 && nx < 0.68 && ny > 0.18) return "face";
+            return "head";
+        }
+        if (ny < 0.62)
+        {
+            if (nx > 0.80) return "tail";
+            return "body";
+        }
+        if (ny < 0.82)
+        {
+            if (nx > 0.80) return "tail";
+            return "skirt";
+        }
+        return "feet";
+    }
+
+    private bool Live2DInputReady()
+    {
+        return !_closing && GameRuntime.Engine?.State.Avatar == AvatarKind.Live2D &&
+               _live2DWindow is { IsVisible: true, IsModelReady: true };
+    }
+
+    private bool IsScreenPointInsideLive2D(int x, int y)
+    {
+        if (_live2DWindow is null) return false;
+        try
+        {
+            var point = _live2DWindow.PointFromScreen(new Point(x, y));
+            return point.X >= 0 && point.Y >= 0 &&
+                   point.X <= _live2DWindow.ActualWidth &&
+                   point.Y <= _live2DWindow.ActualHeight;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsScreenPointInsideCharacter(int x, int y)
+    {
+        if (!IsScreenPointInsideLive2D(x, y)) return false;
+        if (IsScreenPointOverStatusBar(x, y)) return false;
+        return _live2DWindow!.ContainsModelPoint(new Point(x, y));
+    }
+
+    /// <summary>The status summary overlaps the bottom few pixels of the
+    /// character at some scales. The status bar must win there so clicking it
+    /// does not also trigger a foot expression or start a drag.</summary>
+    private bool IsScreenPointOverStatusBar(int x, int y)
+    {
+        if (!_settings.ShowStatusBar || _collapsedAtEdge) return false;
+        try
+        {
+            var point = SummaryButton.PointFromScreen(new Point(x, y));
+            return point.X >= 0 && point.Y >= 0 &&
+                   point.X <= SummaryButton.ActualWidth &&
+                   point.Y <= SummaryButton.ActualHeight;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ForwardLive2DMove(int screenX, int screenY)
+    {
+        if (!Live2DInputReady()) return;
+        try
+        {
+            var window = _live2DWindow!;
+            var point = window.PointFromScreen(new Point(screenX, screenY));
+            var x = Math.Clamp(point.X / Math.Max(1, window.ActualWidth), 0, 1);
+            var y = Math.Clamp(point.Y / Math.Max(1, window.ActualHeight), 0, 1);
+            window.SendInput(new { type = "input", @event = "mouseMove", x, y });
+        }
+        catch (Exception error)
+        {
+            Live2DLog.Write("pointer error: " + error.Message);
+        }
     }
 
     private void PositionPointerGlyph(int screenX, int screenY)
@@ -1173,8 +1489,10 @@ public partial class MainWindow : Window
         if (!_dragging && (Math.Abs(dx) > 4 || Math.Abs(dy) > 4)) _dragging = true;
         if (!_dragging) return;
 
-        Left = ClampLeft(_dragStartLeft + dx);
-        Top = ClampTop(_dragStartTop + dy);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        Left = _dragStartLeft + dx / dpi.DpiScaleX;
+        Top = _dragStartTop + dy / dpi.DpiScaleY;
+        ConstrainPetWindow(true);
         _anchorBottom = Top + ActualHeight;
         PositionWorkBadge();
         e.Handled = true;
@@ -1201,6 +1519,7 @@ public partial class MainWindow : Window
 
     private void OnWindowMouseLeave(object sender, MouseEventArgs e)
     {
+        if (IsLive2DMode) return;
         if (!_settings.AutoHideAtEdge || _collapsedAtEdge || _edgeSide == EdgeSide.None || _suppressEdgeCollapse) return;
         _edgeLeaveTimer.Stop();
         _edgeLeaveTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.EdgeHoverSeconds, 1, 10));
@@ -1210,6 +1529,7 @@ public partial class MainWindow : Window
     private void OnEdgeLeaveTimer(object? sender, EventArgs e)
     {
         _edgeLeaveTimer.Stop();
+        if (IsLive2DMode) return;
         if (_collapsedAtEdge || _suppressEdgeCollapse || !_settings.AutoHideAtEdge || IsMouseOver) return;
         CollapseToEdge(_edgeSide);
     }
@@ -1221,6 +1541,7 @@ public partial class MainWindow : Window
 
     private void TryCollapseAtEdge()
     {
+        if (IsLive2DMode) return;
         if (!_settings.AutoHideAtEdge || _collapsedAtEdge) return;
         var area = SystemParameters.WorkArea;
         var threshold = Math.Clamp(_settings.EdgeCollapseDistance, 0, 50);
@@ -1235,6 +1556,7 @@ public partial class MainWindow : Window
 
     private void CollapseToEdge(EdgeSide side)
     {
+        if (IsLive2DMode) return;
         if (_collapsedAtEdge || side == EdgeSide.None) return;
         _expandedBounds = new Rect(Left, Top, Width, Height);
         _edgeSide = side;
@@ -1275,6 +1597,7 @@ public partial class MainWindow : Window
                 EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
                 FillBehavior = FillBehavior.Stop,
             });
+        SyncLive2DWindow();
     }
 
     private void ExpandFromEdge()
@@ -1302,6 +1625,7 @@ public partial class MainWindow : Window
         _edgeLeaveTimer.Stop();
         _edgeLeaveTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.EdgeHoverSeconds, 1, 10));
         _edgeLeaveTimer.Start();
+        SyncLive2DWindow();
     }
 
     private void OnCharacterMouseLeave(object sender, MouseEventArgs e)
@@ -1444,6 +1768,8 @@ public partial class MainWindow : Window
             _adjustingPosition = true;
             Top = ClampTop(_anchorBottom - ActualHeight);
             _adjustingPosition = false;
+            SyncLive2DWindow();
+            QueueLive2DGeometrySync();
         }));
     }
 
@@ -1476,6 +1802,7 @@ public partial class MainWindow : Window
 
         if (_temporaryAvatarGif is not null)
         {
+            _live2DWindow?.SetAvatarVisible(false);
             var tempKey = "temp|" + _temporaryAvatarGif;
             if (tempKey == _gameAvatarKey && AvatarGif.Visibility == Visibility.Visible) return true;
             try
@@ -1499,6 +1826,27 @@ public partial class MainWindow : Window
         }
 
         var avatar = engine.EffectiveAvatar();
+        if (avatar.Kind == AvatarKind.Live2D)
+        {
+            // Live2D disables edge auto-collapse. If the pet was already
+            // collapsed, reopen it instead of leaving the model behind a tab.
+            _edgeLeaveTimer.Stop();
+            if (_collapsedAtEdge) ExpandFromEdge();
+            _live2DModelId = string.IsNullOrWhiteSpace(engine.State.CurrentLive2DModelId)
+                ? "seethrough_output"
+                : engine.State.CurrentLive2DModelId;
+            if (_live2DWindow is { IsModelReady: true })
+            {
+                _live2DWindow.SetAvatarVisible(true);
+                HideBitmapLayers();
+                _gameAvatarKey = "live2d|" + _live2DModelId;
+                return true;
+            }
+            _ = EnsureLive2DAsync(_live2DModelId);
+            return true;
+        }
+
+        _live2DWindow?.SetAvatarVisible(false);
         if (avatar.Kind == AvatarKind.DefaultStatic)
         {
             if (AvatarGif.Visibility == Visibility.Visible)
@@ -1572,14 +1920,212 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private async Task<bool> EnsureLive2DAsync(string modelId)
+    {
+        if (_live2DInitializing || _closing) return false;
+        _live2DInitializing = true;
+        try
+        {
+            if (_live2DWindow is null)
+            {
+                _live2DWindow = new Live2DWindow();
+                _live2DWindow.CharacterBoundsProvider = Live2DCharacterBoundsInWindow;
+                _live2DWindow.ShouldPassThrough =
+                    point => IsScreenPointOverStatusBar((int)Math.Round(point.X), (int)Math.Round(point.Y));
+                _live2DWindow.AttachOwner(this);
+                // Input is owned by the global hook: WebView2's pointer path
+                // can also fire and would duplicate a part click or a drag.
+                _live2DWindow.LoadFailed += OnLive2DLoadFailed;
+            }
+            _live2DWindow.PrepareForInitialization();
+            var ready = await _live2DWindow.EnsureInitializedAsync();
+            if (_closing || GameRuntime.Engine?.State.Avatar != AvatarKind.Live2D) return false;
+            if (!ready)
+            {
+                OnLive2DLoadFailed("Live2D 加载失败，已回退到默认形象");
+                return false;
+            }
+            _live2DWindow.SetAvatarVisible(true);
+            SyncLive2DWindow();
+            HideBitmapLayers();
+            return true;
+        }
+        catch (Exception error)
+        {
+            Live2DLog.Write("ensure error: " + error.Message);
+            OnLive2DLoadFailed("Live2D 加载失败，已回退到默认形象");
+            return false;
+        }
+        finally
+        {
+            _live2DInitializing = false;
+        }
+    }
+
+    private void HideBitmapLayers()
+    {
+        try { AvatarGif.Clear(); } catch { }
+        AvatarGif.Visibility = Visibility.Collapsed;
+        FrontImage.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Single geometry/visibility entry for the Live2D overlay.</summary>
+    private void SyncLive2DWindow()
+    {
+        if (_live2DWindow is null || _closing) return;
+        _live2DWindow.SyncToOwner();
+        if (GameRuntime.Engine?.State.Avatar != AvatarKind.Live2D)
+        {
+            _live2DWindow.SetAvatarVisible(false);
+            return;
+        }
+        if (_collapsedAtEdge || WindowState != WindowState.Normal || !IsVisible)
+        {
+            _live2DWindow.SetTemporarilyHidden(true);
+            return;
+        }
+        _live2DWindow.SetTemporarilyHidden(false);
+        _live2DWindow.SyncAndResize();
+        // The overlay is sized to the character area, so the web canvas maps
+        // 1:1 to it. Keeping this explicit also resets a stale layout after a
+        // DPI or window-size transition.
+        _live2DWindow.NotifyLayout(0, 0, 1, 1);
+    }
+
+    /// <summary>Runs one geometry sync after WPF has finished the layout pass
+    /// that follows a status-panel expand/collapse. Without this second pass
+    /// the overlay sometimes keeps the pre-animation height.</summary>
+    private void QueueLive2DGeometrySync()
+    {
+        if (_closing) return;
+        var token = ++_live2DLayoutToken;
+        if (!_live2DSyncQueued)
+        {
+            _live2DSyncQueued = true;
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                _live2DSyncQueued = false;
+                if (_closing || token != _live2DLayoutToken) return;
+                UpdateLayout();
+                SyncLive2DWindow();
+                _live2DWindow?.NotifyResize();
+            }));
+        }
+        _ = DelayedLive2DGeometrySyncAsync(token, 280);
+    }
+
+    private async Task DelayedLive2DGeometrySyncAsync(int token, int delayMilliseconds)
+    {
+        try
+        {
+            await Task.Delay(delayMilliseconds);
+        }
+        catch
+        {
+            return;
+        }
+        if (_closing || token != _live2DLayoutToken) return;
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (_closing || token != _live2DLayoutToken) return;
+            UpdateLayout();
+            SyncLive2DWindow();
+            _live2DWindow?.NotifyResize();
+        });
+    }
+
+    private void OnLive2DGeometryChanged(object? sender, EventArgs e) => SyncLive2DWindow();
+
+    private void OnLive2DDpiChanged(object? sender, DpiChangedEventArgs e) => SyncLive2DWindow();
+
+    private void OnLive2DStateChanged(object? sender, EventArgs e) => SyncLive2DWindow();
+
+    private void OnLive2DVisibilityChanged(object? sender, DependencyPropertyChangedEventArgs e) =>
+        SyncLive2DWindow();
+
+    private void OnLive2DRightClick()
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_closing) return;
+            OpenPetContextMenu();
+        }));
+    }
+
+    private void OpenPetContextMenu()
+    {
+        if (Root.ContextMenu is not { } menu)
+        {
+            Live2DLog.Write("pet menu missing");
+            return;
+        }
+        if (menu.IsOpen)
+        {
+            Live2DLog.Write("pet menu already open");
+            return;
+        }
+        menu.PlacementTarget = this;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.IsOpen = true;
+    }
+
+    private void OnLive2DDragStarted(double screenX, double screenY)
+    {
+        _live2DDragging = true;
+        _live2DPointerStartX = screenX;
+        _live2DPointerStartY = screenY;
+        _live2DPointerStartLeft = Left;
+        _live2DPointerStartTop = Top;
+    }
+
+    private void OnLive2DDragMoved(double screenX, double screenY)
+    {
+        if (!_live2DDragging) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        Left = _live2DPointerStartLeft + (screenX - _live2DPointerStartX) / dpi.DpiScaleX;
+        Top = _live2DPointerStartTop + (screenY - _live2DPointerStartY) / dpi.DpiScaleY;
+        ConstrainPetWindow(true);
+        SyncLive2DWindow();
+    }
+
+    private void OnLive2DDragEnded()
+    {
+        _live2DDragging = false;
+    }
+
+    private void OnLive2DPartClicked(string part)
+    {
+        if (!Live2DPartExpressions.TryGetValue(part, out var expression))
+        {
+            Live2DLog.Write("unmapped Live2D part: " + part);
+            return;
+        }
+        Live2DLog.Write($"part {part} -> expression {expression}");
+        _live2DWindow?.SendExpression(expression);
+    }
+
+    private void OnLive2DLoadFailed(string message)
+    {
+        if (_closing) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_closing) return;
+            _live2DWindow?.SetAvatarVisible(false);
+            GameRuntime.Engine?.FallbackToDefault("Live2D 加载失败，已回退到默认形象");
+            ShowSpeech(string.IsNullOrWhiteSpace(message)
+                ? "Live2D 加载失败，已回退到默认形象"
+                : message);
+        }));
+    }
+
     /// <summary>Switches the pet to a temporary game animation, then restores it.</summary>
     public void SetTemporaryAvatar(string gifId)
     {
+        _live2DWindow?.SetAvatarVisible(false);
         _temporaryAvatarGif = gifId;
         _gameAvatarKey = "";
         ApplyGameAvatar();
     }
-
     public void RestoreTemporaryAvatar()
     {
         if (_temporaryAvatarGif is null) return;
@@ -1597,9 +2143,36 @@ public partial class MainWindow : Window
     public Rect CharacterBoundsInWindow()
     {
         var origin = CharacterHost.TransformToAncestor(this).Transform(new Point(0, 0));
-        var far = CharacterHost.TransformToAncestor(this).Transform(
-            new Point(CharacterHost.ActualWidth, CharacterHost.ActualHeight));
-        return new Rect(origin, new Size(Math.Max(1, far.X - origin.X), Math.Max(1, far.Y - origin.Y)));
+        var roundedOrigin = new Point(Math.Round(origin.X), Math.Round(origin.Y));
+        // Use the design size and the two explicit scale transforms instead of
+        // a mid-layout ActualWidth: while a drag is applying a new window
+        // position the layout pass can briefly report 152x138 instead of the
+        // settled 150x140, which made the model scale jump by ~1.4%.
+        var baseWidth = double.IsNaN(CharacterHost.Width) ? CharacterHost.ActualWidth : CharacterHost.Width;
+        var baseHeight = double.IsNaN(CharacterHost.Height) ? CharacterHost.ActualHeight : CharacterHost.Height;
+        var width = Math.Max(1, Math.Round(baseWidth * CharacterLayoutScale.ScaleX * RootScale.ScaleX));
+        var height = Math.Max(1, Math.Round(baseHeight * CharacterLayoutScale.ScaleY * RootScale.ScaleY));
+        return new Rect(roundedOrigin, new Size(width, height));
+    }
+
+    /// <summary>The Live2D overlay stops at the top of the status summary so
+    /// the summary remains clickable; the model is contained into the
+    /// remaining rectangle and is never clipped.</summary>
+    private Rect Live2DCharacterBoundsInWindow()
+    {
+        var bounds = CharacterBoundsInWindow();
+        if (!_settings.ShowStatusBar || _collapsedAtEdge || !SummaryButton.IsVisible) return bounds;
+        try
+        {
+            var summaryTop = SummaryButton.TransformToAncestor(this).Transform(new Point(0, 0)).Y;
+            var bottom = Math.Min(bounds.Bottom, summaryTop);
+            return new Rect(bounds.X, bounds.Y, bounds.Width,
+                Math.Max(1, Math.Round(bottom - bounds.Y)));
+        }
+        catch
+        {
+            return bounds;
+        }
     }
 
     private void OnCharacterPanelClick(object sender, RoutedEventArgs e) => OpenCharacterPanel();
@@ -2317,6 +2890,8 @@ public partial class MainWindow : Window
             Left = Math.Max(workArea.Left, workArea.Right - Width);
             _adjustingPosition = false;
         }
+        SyncLive2DWindow();
+        QueueLive2DGeometrySync();
     }
 
     private void RestorePosition()
@@ -2390,6 +2965,8 @@ public partial class MainWindow : Window
             _adjustingPosition = false;
         }
         if (e.WidthChanged || e.HeightChanged) PositionStatusActions();
+        SyncLive2DWindow();
+        QueueLive2DGeometrySync();
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -2410,6 +2987,8 @@ public partial class MainWindow : Window
         _reminderPopupWindow = null;
         _inputHook?.Dispose();
         if (_inputHook is not null) _inputHook.KeyPressed -= OnGlobalKeyPressed;
+        if (_inputHook is not null) _inputHook.PointerButtonPressed -= OnGlobalPointerButtonPressed;
+        if (_inputHook is not null) _inputHook.PointerButtonReleased -= OnGlobalPointerButtonReleased;
         ClipboardStore.Changed -= OnClipboardStoreChanged;
         Native.StopListeningForClipboard(_hwnd);
         HotkeyManager.Unregister(_hwnd, ScreenshotHotkeyId);
@@ -2432,6 +3011,21 @@ public partial class MainWindow : Window
         _todoWindow = null;
         _avatarSwitch?.Close();
         _avatarSwitch = null;
+        LocationChanged -= OnLive2DGeometryChanged;
+        DpiChanged -= OnLive2DDpiChanged;
+        StateChanged -= OnLive2DStateChanged;
+        IsVisibleChanged -= OnLive2DVisibilityChanged;
+        UnsubscribeDisplaySettings();
+        if (_live2DWindow is not null)
+        {
+            _live2DWindow.RightClickRequested -= OnLive2DRightClick;
+            _live2DWindow.DragStarted -= OnLive2DDragStarted;
+            _live2DWindow.DragMoved -= OnLive2DDragMoved;
+            _live2DWindow.DragEnded -= OnLive2DDragEnded;
+            _live2DWindow.PartClicked -= OnLive2DPartClicked;
+            _live2DWindow.DisposeAndClose();
+        }
+        _live2DWindow = null;
         if (GameRuntime.Engine is { } engine)
         {
             engine.Toast -= OnGameToast;

@@ -136,6 +136,23 @@
                         </Grid>
                     </Border>
                 </TabItem>
+                <TabItem Header="Live2D" Style="{StaticResource SwitchTab}">
+                    <Border Background="#140E2C4C" BorderBrush="#2C5B84" BorderThickness="1"
+                            CornerRadius="12" Padding="12,10" Margin="0,8,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <WrapPanel x:Name="Live2DPanel" Orientation="Horizontal"/>
+                            </ScrollViewer>
+                            <TextBlock x:Name="Live2DHintText" Grid.Row="1" FontSize="9.5"
+                                       Foreground="#7FA5C5" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        </Grid>
+                    </Border>
+                </TabItem>
             </TabControl>
 
             <Grid Grid.Row="2">

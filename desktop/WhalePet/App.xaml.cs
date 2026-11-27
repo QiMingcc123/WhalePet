@@ -22,6 +22,7 @@ public partial class App : Application
         }
 
         AssetBootstrapper.Ensure();
+        Live2DLog.Cleanup();
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         PersistentStore.CleanupBackups();
         base.OnStartup(e);
